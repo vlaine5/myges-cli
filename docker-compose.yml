@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  myges-sync:
+    build: .
+    env_file: ".env"
+    environment:
+      - MYGES_USERNAME=${MYGES_USERNAME}
+      - MYGES_PASSWORD=${MYGES_PASSWORD}
+      - START_DATE=2025-01-01
+      - END_DATE=2025-01-31
+    volumes:
+      - ./data:/app/data
+      - ./credentials.json:/app/credentials.json:ro
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure

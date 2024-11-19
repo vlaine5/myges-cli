@@ -1,0 +1,1 @@
+0 */12 * * * /app/sync_calendar.sh >> /app/data/sync.log 2>&1

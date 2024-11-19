@@ -1,3 +1,15 @@
+# This fork
+
+This fork as a goal to redev in python this app. At the moment, the app extracts logs and ics calendar who can be imported to any calendar.
+Setup start date and end date to export.
+
+```bash
+docker-compose up --build
+```
+
+next step, dev new api communication. At the moment the app use "myges login" to log into myges and myges agenda to export data.
+
+
 # MyGES CLI
 
 A Command Line Interface replacement for MyGES ([Réseau GES](http://www.reseau-ges.fr/)' Extranet).
