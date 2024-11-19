@@ -12,7 +12,25 @@ Then wait and check ./data and take your .ics.
 
 A crontab is implemented for reexuction if you keep the stack up
 
+Format of ICS file : 
 
+```
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//MyGES Calendar//
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+SUMMARY:S2 - subject of class
+DTSTART;TZID=Europe/Paris:20250106T140000
+DTEND;TZID=Europe/Paris:20250106T153000
+UID:c7f9be5b-54eb-4171-ba88-fef99a1c73f3
+CATEGORIES:COURS
+DESCRIPTION:Promotion: 3 ESGI - IW 1 S1 | Salle: B12 | Groupe: Groupe IW1 | Campus: NATION1 | Cours: B4 - fondamentaux linux | Professeur: M. FAKE
+LOCATION:B12 (1er étage) - 242 rue du Faubourg Saint Antoine, 75012 Paris
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+```
 Next step, 
 - dev new api communication. At the moment the app use "myges login" to log into myges and myges agenda to export data.
 - implement automatic sync with google calendar or nextcloud calendar
