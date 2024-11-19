@@ -3,11 +3,20 @@
 This fork as a goal to redev in python this app. At the moment, the app extracts logs and ics calendar who can be imported to any calendar.
 Setup start date and end date to export.
 
+Begin by add .env with your info
 ```bash
+cp .env.example .env
 docker-compose up --build
 ```
+Then wait and check ./data and take your .ics.
 
-next step, dev new api communication. At the moment the app use "myges login" to log into myges and myges agenda to export data.
+A crontab is implemented for reexuction if you keep the stack up
+
+
+Next step, 
+- dev new api communication. At the moment the app use "myges login" to log into myges and myges agenda to export data.
+- implement automatic sync with google calendar or nextcloud calendar
+- any idea ?
 
 
 # MyGES CLI
