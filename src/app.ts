@@ -28,6 +28,13 @@ export function createApp(services: Services) {
   app.use(
     pinoHttp({
       logger,
+      // Never log request headers: browsers send every cookie for the host,
+      // including other self-hosted apps' session tokens on the same IP.
+      serializers: {
+        req: (req: { method?: string; url?: string }) => ({ method: req.method, url: req.url }),
+        res: (res: { statusCode?: number }) => ({ statusCode: res.statusCode }),
+      },
+      autoLogging: { ignore: (req) => req.url === '/api/health' },
     }),
   );
   app.use(express.json({ limit: '1mb' }));
