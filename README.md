@@ -387,7 +387,12 @@ Persistance:
 
 ## Variables d’environnement
 
-Variables principales:
+Deux categories tres differentes, a ne pas confondre:
+
+1. **Infra, toujours lues** — necessaires au fonctionnement de l'app elle-meme, relues a chaque demarrage.
+2. **Identifiants (providers + Google OAuth), optionnelles** — ne servent qu'a pre-remplir la base au tout premier demarrage, si elle est encore vide. Une fois des identifiants enregistres (via l'env ou directement via l'interface `/provider` / `/google`), **c'est l'interface qui fait foi**: ces variables ne sont plus jamais relues. Inutile de les renseigner dans `.env` si tu comptes tout configurer depuis l'UI.
+
+Infra (toujours requis):
 
 - `NODE_ENV`
 - `HOST`
@@ -397,47 +402,26 @@ Variables principales:
 - `DATABASE_URL`
 - `APP_DATA_DIR`
 - `LOG_LEVEL`
+- `GOOGLE_OAUTH_SCOPES` (exception: celle-ci est relue a chaque connexion OAuth, jamais stockee en base)
+
+Parametres de sync par defaut (seed unique dans `AppSettings`, modifiables ensuite via `/settings`):
+
 - `ACADEMIC_PROVIDER`
+- `SYNC_ENABLED`, `SYNC_LOOKBACK_DAYS`, `SYNC_FUTURE_DAYS`, `SYNC_FREQUENCY_MINUTES`, `SYNC_RUN_ON_STARTUP`
+- `GOOGLE_SYNC_ENABLED`, `SAVE_LAST_ICS`, `STORE_RAW_PAYLOAD`, `TIMEZONE`
 
-MyGES:
+Identifiants providers (optionnel, bootstrap unique — configurable ensuite via `/provider`):
 
-- `MYGES_USERNAME`
-- `MYGES_PASSWORD`
+- MyGES: `MYGES_USERNAME`, `MYGES_PASSWORD`
+- myEfrei: `MYEFREI_USERNAME`, `MYEFREI_PASSWORD`, `MYEFREI_SESSION_COOKIE`, `MYEFREI_AGENDA_ENDPOINT`
+- Ensup: `ENSUP_USERNAME`, `ENSUP_PASSWORD`, `ENSUP_SESSION_COOKIE`, `ENSUP_AGENDA_ENDPOINT`, `ENSUP_ICS_URL`
 
-myEfrei:
-
-- `MYEFREI_USERNAME`
-- `MYEFREI_PASSWORD`
-- `MYEFREI_SESSION_COOKIE`
-- `MYEFREI_AGENDA_ENDPOINT`
-
-Ensup:
-
-- `ENSUP_USERNAME`
-- `ENSUP_PASSWORD`
-- `ENSUP_SESSION_COOKIE`
-- `ENSUP_AGENDA_ENDPOINT`
-- `ENSUP_ICS_URL`
-
-Google:
+Google OAuth (optionnel, bootstrap unique — configurable ensuite via `/google`, qui a priorite a chaque connexion):
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_OAUTH_REDIRECT_URL`
-- `GOOGLE_OAUTH_SCOPES`
 - `GOOGLE_DEFAULT_CALENDAR_ID`
-
-Sync:
-
-- `SYNC_ENABLED`
-- `SYNC_LOOKBACK_DAYS`
-- `SYNC_FUTURE_DAYS`
-- `SYNC_FREQUENCY_MINUTES`
-- `SYNC_RUN_ON_STARTUP`
-- `GOOGLE_SYNC_ENABLED`
-- `SAVE_LAST_ICS`
-- `STORE_RAW_PAYLOAD`
-- `TIMEZONE`
 
 ## Tests
 
