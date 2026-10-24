@@ -1,6 +1,6 @@
 {
   "name": "myges-app",
-  "version": "5.2.5",
+  "version": "5.2.6",
   "private": true,
   "description": "Personal academic sync service with multi-provider API, web UI, SQLite persistence and Google Calendar integration.",
   "engines": {

@@ -83,3 +83,30 @@ export function planSyncActions(
     unchanged,
   };
 }
+
+/**
+ * Moves update/unchanged entries whose Google event no longer exists (deleted
+ * by hand in Google, or living in a calendar that is no longer the selected
+ * one) back to `create`. The stored mapping alone can't tell, so without this
+ * such events are never pushed again.
+ */
+export function requeueMissingGoogleEvents(
+  plan: SyncActionPlan,
+  isPresentOnGoogle: (mapping: EventMapping) => boolean,
+): SyncActionPlan {
+  const create = [...plan.create];
+  const update: SyncActionPlan['update'] = [];
+  const unchanged: SyncActionPlan['unchanged'] = [];
+
+  for (const entry of plan.update) {
+    if (isPresentOnGoogle(entry.mapping)) update.push(entry);
+    else create.push(entry.event);
+  }
+
+  for (const entry of plan.unchanged) {
+    if (isPresentOnGoogle(entry.mapping)) unchanged.push(entry);
+    else create.push(entry.event);
+  }
+
+  return { create, update, delete: plan.delete, unchanged };
+}

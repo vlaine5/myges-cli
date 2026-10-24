@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { EventMapping, PrismaClient } from '@prisma/client';
 import { AppError } from '../../lib/app-error';
 import { logger } from '../../lib/logger';
 import { sha256 } from '../../lib/hash';
@@ -13,7 +13,12 @@ import type { SettingsService } from '../settings/settings.service';
 import type { GoogleCalendarService } from '../google/google-calendar.service';
 import type { IcsExportService } from '../export/ics-export.service';
 import type { ReconciliationService } from '../reconciliation/reconciliation.service';
-import { planSyncActions, type GlobalEventSyncInput } from './plan-sync';
+import {
+  planSyncActions,
+  requeueMissingGoogleEvents,
+  type GlobalEventSyncInput,
+  type SyncActionPlan,
+} from './plan-sync';
 
 export interface SyncRunOptions {
   trigger: 'MANUAL' | 'SCHEDULED' | 'STARTUP';
@@ -357,6 +362,54 @@ export class SyncService {
     return views;
   }
 
+  /**
+   * Checks the calendar each event targets and re-creates those whose stored
+   * Google event is gone (deleted by hand, or in a previously selected calendar).
+   */
+  private async requeueEventsMissingFromGoogle(
+    plan: SyncActionPlan,
+    resolveCalendarId: (providerId: AcademicProviderId) => Promise<string>,
+  ) {
+    const entries = [...plan.update, ...plan.unchanged];
+    if (entries.length === 0) return plan;
+
+    const byCalendar = new Map<string, EventMapping[]>();
+    for (const entry of entries) {
+      const calendarId = await resolveCalendarId(entry.event.event.provider);
+      byCalendar.set(calendarId, [...(byCalendar.get(calendarId) ?? []), entry.mapping]);
+    }
+
+    const liveIdsByCalendar = new Map<string, Set<string>>();
+    const calendarByMappingId = new Map<string, string>();
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    for (const [calendarId, calendarMappings] of byCalendar) {
+      const starts = calendarMappings.map((mapping) => mapping.lastKnownStartAt.getTime());
+      const ends = calendarMappings.map((mapping) => mapping.lastKnownEndAt.getTime());
+      liveIdsByCalendar.set(
+        calendarId,
+        await this.googleCalendarService.listLiveEventIds(
+          calendarId,
+          new Date(Math.min(...starts) - dayMs),
+          new Date(Math.max(...ends) + dayMs),
+        ),
+      );
+      for (const mapping of calendarMappings) calendarByMappingId.set(mapping.id, calendarId);
+    }
+
+    const requeued = requeueMissingGoogleEvents(plan, (mapping) => {
+      const liveIds = liveIdsByCalendar.get(calendarByMappingId.get(mapping.id) ?? '');
+      return Boolean(mapping.googleEventId && liveIds?.has(mapping.googleEventId));
+    });
+
+    const requeuedCount = requeued.create.length - plan.create.length;
+    if (requeuedCount > 0) {
+      logger.info({ requeuedCount }, 'Re-creating events missing from their Google calendar.');
+    }
+
+    return requeued;
+  }
+
   private async runInternal(options: SyncRunOptions) {
     const settings = await this.prisma.appSettings.findUniqueOrThrow({
       where: { id: 1 },
@@ -423,12 +476,28 @@ export class SyncService {
         },
       });
 
+      // Events of this provider stored locally but never on Google — fetched
+      // before Google was connected or while Google sync was off, or now outside
+      // the fetch window — are otherwise never touched again, so never pushed.
+      const unsyncedGlobalEvents = await this.prisma.globalEvent.findMany({
+        where: {
+          retiredAt: null,
+          snapshots: { some: { provider: provider.id } },
+          OR: [{ mapping: { is: null } }, { mapping: { is: { googleEventId: null } } }],
+        },
+        select: { id: true },
+      });
+
       const relevantGlobalEventIds = [
-        ...new Set([...touchedGlobalEventIds, ...mappings.map((mapping) => mapping.globalEventId)]),
+        ...new Set([
+          ...touchedGlobalEventIds,
+          ...mappings.map((mapping) => mapping.globalEventId),
+          ...unsyncedGlobalEvents.map((globalEvent) => globalEvent.id),
+        ]),
       ];
       const globalEventViews = await this.buildGlobalEventSyncViews(relevantGlobalEventIds);
 
-      const plan = planSyncActions(globalEventViews, mappings, range);
+      let plan = planSyncActions(globalEventViews, mappings, range);
 
       // A Google event whose GlobalEvent has lost every source snapshot (manual
       // cleanup, or the source dropped it) has nothing left to represent, so it
@@ -467,6 +536,8 @@ export class SyncService {
         };
 
         if (!options.dryRun) {
+          plan = await this.requeueEventsMissingFromGoogle(plan, resolveCalendarId);
+
           for (const input of plan.create) {
             const calendarId = await resolveCalendarId(input.event.provider);
             const response = await this.googleCalendarService.upsertEvent(

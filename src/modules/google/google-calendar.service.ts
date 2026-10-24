@@ -117,6 +117,33 @@ export class GoogleCalendarService {
     }
   }
 
+  /** Ids of the events that currently exist (not cancelled) in a calendar over a date range. */
+  async listLiveEventIds(calendarId: string, timeMin: Date, timeMax: Date) {
+    const calendarApi = await this.getCalendarApi();
+    const ids = new Set<string>();
+    let pageToken: string | undefined;
+
+    do {
+      const response = await calendarApi.events.list({
+        calendarId,
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        singleEvents: true,
+        showDeleted: false,
+        maxResults: 2500,
+        pageToken,
+      });
+
+      for (const item of response.data.items ?? []) {
+        if (item.id && item.status !== 'cancelled') ids.add(item.id);
+      }
+
+      pageToken = response.data.nextPageToken ?? undefined;
+    } while (pageToken);
+
+    return ids;
+  }
+
   async deleteEvent(calendarId: string, googleEventId: string) {
     const calendarApi = await this.getCalendarApi();
 
