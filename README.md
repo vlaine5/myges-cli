@@ -160,6 +160,24 @@ Conséquences:
 - l’export ICS depuis le cache n’exporte plus les doublons visibles
 - la sync ICS supprime aussi les doublons futurs équivalents qui disparaissent du flux
 
+## Réconciliation inter-provider (`GlobalEvent`)
+
+Au-delà du collapse ci-dessus (même provider), un modèle à trois niveaux relie les événements source à un événement canonique:
+
+```
+EventSnapshot (par provider)  →  GlobalEvent (canonique)  →  EventMapping (Google)
+```
+
+Règles:
+
+- chaque `EventSnapshot` appartient toujours à un `GlobalEvent` (solo par défaut)
+- liaison automatique uniquement sur preuve forte: identifiant vérifié partagé entre providers, ou répétition d'une correspondance déjà confirmée par un humain (`src/modules/reconciliation/reconciliation.service.ts`)
+- une simple ressemblance (horaire + titre + salle/enseignant) ne produit qu'une suggestion (`SUGGESTED`/`AMBIGUOUS`), jamais une fusion automatique — à valider sur `/matches`
+- toute décision (auto-lien, confirmation, rejet, déliaison) est tracée dans `EventMatch`, jamais écrasée
+- Google ne reçoit qu'un événement par `GlobalEvent`; fusionner deux événements déjà synchronisés supprime le doublon Google plutôt que d'en garder deux
+
+Chaque exécution de sync journalise aussi ses changements (`SyncJobEventChange`), consultables et annulables (changement par changement ou en bloc) depuis `/sync/:jobId`.
+
 ## Heures d’enseignement
 
 La page `/teaching` agrège les heures par classe / groupe sur une période donnée.
@@ -260,9 +278,18 @@ Routes principales:
 - `PATCH /api/providers/:provider/config`
 - `GET /api/events?provider=&start=&end=&refresh=`
 - `GET /api/events/:id`
+- `GET /api/global-events?start=&end=`
+- `GET /api/global-events/:id`
+- `GET /api/reconciliation/suggestions?provider=`
+- `POST /api/reconciliation/suggestions/:matchId/confirm`
+- `POST /api/reconciliation/suggestions/:matchId/reject`
+- `POST /api/reconciliation/links/:globalEventId/unlink`
 - `POST /api/sync/run`
 - `POST /api/sync/dry-run`
 - `GET /api/sync/history?provider=`
+- `GET /api/sync/jobs/:jobId/changes`
+- `POST /api/sync/jobs/:jobId/changes/:changeId/rollback`
+- `POST /api/sync/jobs/:jobId/rollback`
 - `GET /api/export/ics?provider=&start=&end=&save=&refresh=`
 - `GET /api/export/ics/latest`
 - `POST /api/ics/sync`
@@ -281,11 +308,15 @@ Routes principales:
 
 Pages utiles:
 
-- `/` dashboard
+- `/` accueil (calendrier global + panneau d'activité + bandeau d'alerte)
+- `/agendas`
+- `/imports`
 - `/provider` ou `/providers`
 - `/google`
 - `/agenda` ou `/events`
+- `/matches` suggestions de rapprochement multi-provider
 - `/sync`
+- `/sync/:jobId` détail d'une synchronisation (journal de changements, rollback)
 - `/teaching`
 - `/settings`
 
