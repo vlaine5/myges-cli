@@ -69,5 +69,40 @@ export function createSyncRouter(services: Services) {
     }),
   );
 
+  /**
+   * GET /api/sync/jobs/:jobId/changes
+   * Per-sync-job audit log, in the order the actions were applied.
+   */
+  router.get(
+    '/jobs/:jobId/changes',
+    asyncHandler(async (request, response) => {
+      response.json(await services.syncService.getJobChanges(String(request.params.jobId)));
+    }),
+  );
+
+  /**
+   * POST /api/sync/jobs/:jobId/changes/:changeId/rollback
+   * Re-applies the inverse of a single logged change.
+   */
+  router.post(
+    '/jobs/:jobId/changes/:changeId/rollback',
+    asyncHandler(async (request, response) => {
+      await services.syncService.rollbackChange(String(request.params.changeId));
+      response.json(await services.syncService.getJobChanges(String(request.params.jobId)));
+    }),
+  );
+
+  /**
+   * POST /api/sync/jobs/:jobId/rollback
+   * Rolls back every not-yet-rolled-back change for the job.
+   */
+  router.post(
+    '/jobs/:jobId/rollback',
+    asyncHandler(async (request, response) => {
+      const results = await services.syncService.rollbackJob(String(request.params.jobId));
+      response.json({ results });
+    }),
+  );
+
   return router;
 }

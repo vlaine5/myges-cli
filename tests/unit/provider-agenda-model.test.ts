@@ -41,6 +41,7 @@ describe('EventDto includes agendaId field', () => {
     lastSeenAt: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
+    globalEventId: 'global:test',
     ...overrides,
   });
 

@@ -185,6 +185,40 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
+/**
+ * Converts a persisted EventSnapshot back into a NormalizedEvent (Date objects,
+ * not ISO strings) — used by the sync engine to build the Google payload from a
+ * GlobalEvent's primary snapshot, which may belong to a different provider than
+ * the one currently being synced.
+ */
+export function snapshotToNormalizedEvent(snapshot: EventSnapshot): NormalizedEvent {
+  return {
+    id: snapshot.id,
+    provider: snapshot.provider as AcademicProviderId,
+    sourceId: snapshot.sourceId,
+    reservationId: snapshot.reservationId,
+    title: snapshot.title,
+    subject: snapshot.subject,
+    startAt: snapshot.startAt,
+    endAt: snapshot.endAt,
+    teacher: snapshot.teacher,
+    room: snapshot.room,
+    campus: snapshot.campus,
+    rooms: parseJson<NormalizedRoom[]>(snapshot.roomsJson, []),
+    promotion: snapshot.promotion,
+    group: snapshot.groupName,
+    classes: parseJson<string[]>(snapshot.classesJson, []),
+    modality: snapshot.modality,
+    reservationType: snapshot.reservationType,
+    studentCount: snapshot.studentCount,
+    disciplineName: snapshot.disciplineName,
+    disciplineTeacher: snapshot.disciplineTeacher,
+    disciplineId: snapshot.disciplineId,
+    rawPayload: snapshot.rawPayload,
+    sourceHash: snapshot.sourceHash,
+  };
+}
+
 export function snapshotToEventDto(snapshot: EventSnapshot, includeRawPayload = false): EventDto {
   return {
     id: snapshot.id,

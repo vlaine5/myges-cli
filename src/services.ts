@@ -10,6 +10,7 @@ import { EnsupProvider } from './modules/providers/ensup.provider';
 import { MyEfreiProvider } from './modules/providers/myefrei.provider';
 import { MyGesProvider } from './modules/providers/myges.provider';
 import { ProviderRegistryService } from './modules/providers/provider-registry.service';
+import { ReconciliationService } from './modules/reconciliation/reconciliation.service';
 import { SchedulerService } from './modules/scheduler/scheduler.service';
 import { SettingsService } from './modules/settings/settings.service';
 import { IcsSyncService } from './modules/sync/ics-sync.service';
@@ -25,6 +26,7 @@ export function createServices(prisma: PrismaClient) {
   const eventsService = new EventsService(prisma, providerRegistryService, settingsService);
   const googleAuthService = new GoogleAuthService(prisma);
   const googleCalendarService = new GoogleCalendarService(googleAuthService);
+  const reconciliationService = new ReconciliationService(prisma, googleCalendarService);
   const icsExportService = new IcsExportService(prisma);
   const syncService = new SyncService(
     prisma,
@@ -33,8 +35,9 @@ export function createServices(prisma: PrismaClient) {
     settingsService,
     googleCalendarService,
     icsExportService,
+    reconciliationService,
   );
-  const icsSyncService = new IcsSyncService(prisma);
+  const icsSyncService = new IcsSyncService(prisma, reconciliationService);
   const agendaService = new AgendaService(
     prisma,
     eventsService,
@@ -43,7 +46,7 @@ export function createServices(prisma: PrismaClient) {
     syncService,
   );
   const schedulerService = new SchedulerService(prisma, syncService, agendaService);
-  const icsImportService = new IcsImportService(prisma);
+  const icsImportService = new IcsImportService(prisma, reconciliationService);
   const enrichmentRuleService = new EnrichmentRuleService(prisma);
 
   return {
@@ -53,6 +56,7 @@ export function createServices(prisma: PrismaClient) {
     eventsService,
     googleAuthService,
     googleCalendarService,
+    reconciliationService,
     icsExportService,
     syncService,
     schedulerService,

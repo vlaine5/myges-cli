@@ -10,6 +10,7 @@ import { buildNormalizedEvent } from '../events/normalize';
 import type { AcademicProviderId, NormalizedEvent } from '../events/types';
 import { collapseEquivalentEvents, shouldExcludeEvent } from '../events/presentation';
 import { parseStructuredDescription } from '../events/structured-description';
+import type { ReconciliationService } from '../reconciliation/reconciliation.service';
 
 // Known noise category values that are not useful as class names
 const CATEGORIES_NOISE = new Set(['hyperplanning', 'cours', 'event', 'class', '']);
@@ -318,7 +319,10 @@ export function previewIcsContent(
 }
 
 export class IcsImportService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly reconciliationService: ReconciliationService,
+  ) {}
 
   async list(): Promise<IcsImportRecord[]> {
     const rows = await this.prisma.icsImport.findMany({
@@ -465,6 +469,7 @@ export class IcsImportService {
     let created = 0;
     let updated = 0;
     let duplicates = 0;
+    const newSnapshotIds: string[] = [];
 
     for (const ev of collapsedEvents) {
       const existingHash = existingMap.get(ev.id);
@@ -527,6 +532,21 @@ export class IcsImportService {
           sourceHash: ev.sourceHash,
           rawPayload: ev.rawPayload,
           lastSeenAt: now,
+          globalEvent: {
+            create: {
+              title: ev.title,
+              subject: ev.subject,
+              startAt: ev.startAt,
+              endAt: ev.endAt,
+              teacher: ev.teacher,
+              room: ev.room,
+              campus: ev.campus,
+              promotion: ev.promotion,
+              groupName: ev.group,
+              modality: ev.modality,
+              primarySnapshotId: ev.id,
+            },
+          },
         },
       });
 
@@ -534,8 +554,11 @@ export class IcsImportService {
         updated += 1;
       } else {
         created += 1;
+        newSnapshotIds.push(ev.id);
       }
     }
+
+    await this.reconciliationService.reconcileNewSnapshots(newSnapshotIds);
 
     return {
       stats: {

@@ -2,12 +2,13 @@ import type { EventMapping } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import agendaEvent from '../fixtures/agenda-event.json';
 import { normalizeAgendaEvent } from '../../src/modules/events/normalize';
-import { planSyncActions } from '../../src/modules/sync/plan-sync';
+import { planSyncActions, type GlobalEventSyncInput } from '../../src/modules/sync/plan-sync';
 
 function buildMapping(overrides: Partial<EventMapping>): EventMapping {
   return {
     id: 'mapping-1',
-    sourceEventId: 'myges:1827575',
+    provider: 'myges',
+    globalEventId: 'global-1',
     googleEventId: 'google-1',
     lastSyncedHash: 'same-hash',
     lastKnownStartAt: new Date('2025-01-06T09:00:00.000Z'),
@@ -21,6 +22,18 @@ function buildMapping(overrides: Partial<EventMapping>): EventMapping {
   };
 }
 
+function buildInput(overrides: Partial<GlobalEventSyncInput> = {}): GlobalEventSyncInput {
+  const event = normalizeAgendaEvent(agendaEvent);
+
+  return {
+    globalEventId: 'global-1',
+    event,
+    combinedHash: event.sourceHash,
+    linkedSnapshotCount: 1,
+    ...overrides,
+  };
+}
+
 describe('planSyncActions', () => {
   const range = {
     start: new Date('2025-01-01T00:00:00.000Z'),
@@ -28,10 +41,10 @@ describe('planSyncActions', () => {
   };
 
   it('marks an unchanged event when hashes match', () => {
-    const event = normalizeAgendaEvent(agendaEvent);
+    const input = buildInput();
     const plan = planSyncActions(
-      [event],
-      [buildMapping({ sourceEventId: event.id, lastSyncedHash: event.sourceHash })],
+      [input],
+      [buildMapping({ globalEventId: input.globalEventId, lastSyncedHash: input.combinedHash })],
       range,
     );
 
@@ -41,24 +54,34 @@ describe('planSyncActions', () => {
     expect(plan.unchanged).toHaveLength(1);
   });
 
-  it('marks an update when the content hash changed', () => {
-    const event = normalizeAgendaEvent({
-      ...agendaEvent,
-      modality: 'Distanciel',
-    });
+  it('marks an update when the combined hash changed', () => {
+    const input = buildInput({ combinedHash: 'new-combined-hash' });
     const plan = planSyncActions(
-      [event],
-      [buildMapping({ sourceEventId: event.id, lastSyncedHash: 'older-hash' })],
+      [input],
+      [buildMapping({ globalEventId: input.globalEventId, lastSyncedHash: 'older-hash' })],
       range,
     );
 
     expect(plan.update).toHaveLength(1);
+    expect(plan.update[0]!.event.globalEventId).toBe(input.globalEventId);
   });
 
-  it('marks a delete when a mapped event disappears from the source range', () => {
+  it('marks a delete when a mapped GlobalEvent has zero remaining linked snapshots in range', () => {
     const plan = planSyncActions([], [buildMapping({})], range);
 
     expect(plan.delete).toHaveLength(1);
+  });
+
+  it('does NOT delete when another provider still has a linked snapshot for the GlobalEvent', () => {
+    const input = buildInput({ linkedSnapshotCount: 1 }); // this provider's snapshot disappeared, but one remains overall
+    const plan = planSyncActions(
+      [input],
+      [buildMapping({ globalEventId: input.globalEventId, lastSyncedHash: input.combinedHash })],
+      range,
+    );
+
+    expect(plan.delete).toHaveLength(0);
+    expect(plan.unchanged).toHaveLength(1);
   });
 
   it('marks a create when no mapping exists', () => {
@@ -66,8 +89,18 @@ describe('planSyncActions', () => {
       ...agendaEvent,
       reservation_id: 999999,
     });
-    const plan = planSyncActions([event], [], range);
+    const input = buildInput({ globalEventId: 'global-2', event, combinedHash: event.sourceHash });
+    const plan = planSyncActions([input], [], range);
 
     expect(plan.create).toHaveLength(1);
+  });
+
+  it('ignores a GlobalEvent with zero linked snapshots for create/update/unchanged (left to the delete pass)', () => {
+    const input = buildInput({ linkedSnapshotCount: 0 });
+    const plan = planSyncActions([input], [], range);
+
+    expect(plan.create).toHaveLength(0);
+    expect(plan.update).toHaveLength(0);
+    expect(plan.unchanged).toHaveLength(0);
   });
 });

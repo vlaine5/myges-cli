@@ -4,7 +4,6 @@ import { z } from 'zod';
 import type { Services } from '../services';
 import { asyncHandler } from '../lib/http';
 import { detectProviderFromIcs } from '../lib/ics-provider-detector';
-import { fetchAndParseIcs } from '../lib/ics-parser';
 import { previewIcsContent, type DeleteEventsStrategy } from '../modules/imports/ics-import.service';
 
 const providerSchema = z.enum(['myges', 'myefrei', 'ensup', 'generic']);

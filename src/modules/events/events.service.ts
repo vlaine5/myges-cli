@@ -30,6 +30,20 @@ export class EventsService {
     const deduped = collapseEquivalentEvents(dedupeEvents(fetchedEvents));
     const now = new Date();
 
+    // Snapshot ids that don't exist yet are brand-new occurrences: reconciliation
+    // (run by the caller, after this transaction commits) only evaluates these —
+    // a snapshot that merely changed content already belongs to a GlobalEvent and
+    // its membership isn't re-litigated on every sync.
+    const existingIds = new Set(
+      (
+        await this.prisma.eventSnapshot.findMany({
+          where: { id: { in: deduped.length > 0 ? deduped.map((event) => event.id) : ['__none__'] } },
+          select: { id: true },
+        })
+      ).map((row) => row.id),
+    );
+    const newSnapshotIds = deduped.filter((event) => !existingIds.has(event.id)).map((event) => event.id);
+
     await this.prisma.$transaction(
       deduped.map((event) =>
         this.prisma.eventSnapshot.upsert({
@@ -86,6 +100,25 @@ export class EventsService {
             sourceHash: event.sourceHash,
             rawPayload: event.rawPayload,
             lastSeenAt: now,
+            // Every snapshot is born as its own solo GlobalEvent (1:1 by
+            // default). Reconciliation may later merge it into an existing one
+            // on strong evidence — it never leaves a snapshot without a
+            // GlobalEvent, so this must happen in the same write.
+            globalEvent: {
+              create: {
+                title: event.title,
+                subject: event.subject,
+                startAt: event.startAt,
+                endAt: event.endAt,
+                teacher: event.teacher,
+                room: event.room,
+                campus: event.campus,
+                promotion: event.promotion,
+                groupName: event.group,
+                modality: event.modality,
+                primarySnapshotId: event.id,
+              },
+            },
           },
         }),
       ),
@@ -97,6 +130,7 @@ export class EventsService {
       dedupedCount: deduped.length,
       events: deduped,
       eventIds: deduped.map((event) => event.id),
+      newSnapshotIds,
     };
   }
 

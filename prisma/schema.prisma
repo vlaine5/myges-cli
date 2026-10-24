@@ -123,28 +123,87 @@ model EventSnapshot {
   lastSeenAt        DateTime
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
-  mapping           EventMapping?
+  // Every snapshot always belongs to exactly one GlobalEvent (1:1 "solo" at ingestion,
+  // or merged into a shared GlobalEvent once a human/strong-evidence link is made).
+  globalEventId     String
+  globalEvent       GlobalEvent  @relation(fields: [globalEventId], references: [id])
+  matches           EventMatch[]
 
   @@index([startAt])
   @@index([reservationId])
   @@index([provider, startAt])
   @@index([agendaId])
+  @@index([globalEventId])
+}
+
+// The canonical "real class" tier: one GlobalEvent may be backed by several
+// per-provider EventSnapshot rows (MyGES + an ICS import of the same class, etc).
+// Google sync always targets a GlobalEvent, never a raw snapshot.
+model GlobalEvent {
+  id                String    @id @default(cuid())
+  title             String
+  subject           String?
+  startAt           DateTime
+  endAt             DateTime
+  teacher           String?
+  room              String?
+  campus            String?
+  promotion         String?
+  groupName         String?
+  modality          String?
+  // The snapshot currently used as the "template" for this GlobalEvent's display
+  // fields and target Google calendar. Sticky: only re-picked on creation, on the
+  // current primary disappearing, or an explicit user action — never silently.
+  primarySnapshotId String?   @unique
+  // Soft-retired (merged away) GlobalEvents are kept for audit history, never deleted.
+  retiredAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  snapshots EventSnapshot[]
+  matches   EventMatch[]
+  mapping   EventMapping?
+
+  @@index([startAt])
+  @@index([retiredAt])
+}
+
+// Audit trail of every link/unlink decision, machine or human. Rows are append-only:
+// confirming/rejecting/unlinking always writes a NEW row, existing rows are never
+// updated or deleted.
+model EventMatch {
+  id             String    @id @default(cuid())
+  globalEventId  String
+  snapshotId     String
+  status         String    // AUTO_LINKED | SUGGESTED | AMBIGUOUS | CONFIRMED | REJECTED | UNLINKED
+  matchBasis     String    // VERIFIED_IDENTIFIER | APPROVED_PRIOR_MATCH | FUZZY_RESEMBLANCE
+  confidence     Float?
+  reasonJson     String?
+  decidedBy      String?
+  decidedAt      DateTime  @default(now())
+
+  globalEvent GlobalEvent   @relation(fields: [globalEventId], references: [id], onDelete: Cascade)
+  snapshot    EventSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([globalEventId])
+  @@index([snapshotId])
+  @@index([status])
 }
 
 model EventMapping {
-  id             String        @id @default(cuid())
-  provider       String
-  sourceEventId  String        @unique
-  googleEventId  String?
-  lastSyncedHash String?
+  id               String      @id @default(cuid())
+  provider         String
+  globalEventId    String      @unique
+  googleEventId    String?
+  lastSyncedHash   String?
   lastKnownStartAt DateTime
-  lastKnownEndAt DateTime
-  lastAction     String?
-  lastSyncedAt   DateTime?
-  deletedAt      DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  event          EventSnapshot @relation(fields: [sourceEventId], references: [id], onDelete: Cascade)
+  lastKnownEndAt   DateTime
+  lastAction       String?
+  lastSyncedAt     DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  globalEvent      GlobalEvent @relation(fields: [globalEventId], references: [id], onDelete: Cascade)
 
   @@index([lastKnownStartAt])
   @@index([provider, lastKnownStartAt])
@@ -170,8 +229,29 @@ model SyncJob {
   startedAt      DateTime @default(now())
   finishedAt     DateTime?
 
+  changes SyncJobEventChange[]
+
   @@index([startedAt])
   @@index([provider, startedAt])
+}
+
+// Per-change audit log for a sync job, written inline as actions are applied.
+// Enables listing + rolling back individual Google sync actions after the fact.
+model SyncJobEventChange {
+  id            String   @id @default(cuid())
+  syncJobId     String
+  globalEventId String?
+  snapshotId    String?
+  action        String   // CREATED | UPDATED | DELETED | ROLLED_BACK
+  googleEventId String?
+  beforeJson    String?
+  afterJson     String?
+  createdAt     DateTime @default(now())
+
+  syncJob SyncJob @relation(fields: [syncJobId], references: [id], onDelete: Cascade)
+
+  @@index([syncJobId])
+  @@index([globalEventId])
 }
 
 model IcsImport {

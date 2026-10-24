@@ -64,7 +64,7 @@ function sharesAnyToken(left: EventLike, right: EventLike) {
   return false;
 }
 
-function getCompletenessScore(event: EventLike) {
+export function getCompletenessScore(event: EventLike) {
   return (
     (event.teacher ? 3 : 0) +
     (event.room ? 2 : 0) +
@@ -113,8 +113,22 @@ export function shouldExcludeEvent(event: EventLike) {
   return !event.teacher && getClasses(event).length === 0 && !event.group && !event.promotion;
 }
 
-export function areProbableDuplicateEvents(left: EventLike, right: EventLike) {
-  if (left.provider !== right.provider) {
+export interface ProbableDuplicateOptions {
+  /**
+   * When true, skips the same-provider early-return so the fuzzy checks below
+   * (time/title/room/teacher/classes) can also match events from different
+   * providers. Used by the cross-provider reconciliation suggester — never by
+   * collapseEquivalentEvents, which must stay same-provider-only.
+   */
+  crossProvider?: boolean;
+}
+
+export function areProbableDuplicateEvents(
+  left: EventLike,
+  right: EventLike,
+  options: ProbableDuplicateOptions = {},
+) {
+  if (!options.crossProvider && left.provider !== right.provider) {
     return false;
   }
 

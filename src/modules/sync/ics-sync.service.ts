@@ -6,6 +6,7 @@ import { buildNormalizedEvent } from '../events/normalize';
 import type { AcademicProviderId, NormalizedEvent } from '../events/types';
 import { collapseEquivalentEvents, shouldExcludeEvent } from '../events/presentation';
 import { parseStructuredDescription } from '../events/structured-description';
+import type { ReconciliationService } from '../reconciliation/reconciliation.service';
 
 // Known noise values in CATEGORIES that should not be used as class names
 const CATEGORIES_NOISE = new Set(['hyperplanning', 'cours', 'event', 'class', '']);
@@ -86,7 +87,10 @@ export interface IcsSyncResult {
 }
 
 export class IcsSyncService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly reconciliationService: ReconciliationService,
+  ) {}
 
   /**
    * Smart ICS sync:
@@ -139,7 +143,21 @@ export class IcsSyncService {
     const collapsedEvents = collapseEquivalentEvents(normalizedEvents);
     const seenIds = new Set(collapsedEvents.map((event) => event.id));
 
+    const existingIds = new Set(
+      (
+        await this.prisma.eventSnapshot.findMany({
+          where: { id: { in: collapsedEvents.length > 0 ? collapsedEvents.map((e) => e.id) : ['__none__'] } },
+          select: { id: true },
+        })
+      ).map((row) => row.id),
+    );
+    const newSnapshotIds: string[] = [];
+
     for (const normalized of collapsedEvents) {
+      if (!existingIds.has(normalized.id)) {
+        newSnapshotIds.push(normalized.id);
+      }
+
       await this.prisma.eventSnapshot.upsert({
         where: { id: normalized.id },
         update: {
@@ -193,10 +211,27 @@ export class IcsSyncService {
           sourceHash: normalized.sourceHash,
           rawPayload: normalized.rawPayload,
           lastSeenAt: now,
+          globalEvent: {
+            create: {
+              title: normalized.title,
+              subject: normalized.subject,
+              startAt: normalized.startAt,
+              endAt: normalized.endAt,
+              teacher: normalized.teacher,
+              room: normalized.room,
+              campus: normalized.campus,
+              promotion: normalized.promotion,
+              groupName: normalized.group,
+              modality: normalized.modality,
+              primarySnapshotId: normalized.id,
+            },
+          },
         },
       });
       upserted += 1;
     }
+
+    await this.reconciliationService.reconcileNewSnapshots(newSnapshotIds);
 
     // Remove future events from this provider/agenda that have disappeared from the ICS
     // (past events are NEVER deleted — they are permanent historical records)
