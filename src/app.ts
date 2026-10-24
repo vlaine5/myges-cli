@@ -4,7 +4,7 @@ import express from 'express';
 import pinoHttp from 'pino-http';
 import { ZodError } from 'zod';
 import type { Services } from './services';
-import { logger } from './lib/logger';
+import { logger, serializeError } from './lib/logger';
 import { AppError, isAppError } from './lib/app-error';
 import { createSystemRouter } from './routes/system.routes';
 import { createProvidersRouter } from './routes/providers.routes';
@@ -33,6 +33,7 @@ export function createApp(services: Services) {
       serializers: {
         req: (req: { method?: string; url?: string }) => ({ method: req.method, url: req.url }),
         res: (res: { statusCode?: number }) => ({ statusCode: res.statusCode }),
+        err: serializeError,
       },
       autoLogging: { ignore: (req) => req.url === '/api/health' },
     }),
