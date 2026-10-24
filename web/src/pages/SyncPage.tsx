@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { ErrorCallout, LoadingBlock, Panel, SuccessCallout } from '../components/Ui';
 import { formatDateTime, formatMaybe } from '../lib/format';
@@ -10,6 +11,7 @@ function defaultDate(offsetDays = 0) {
 }
 
 export function SyncPage() {
+  const navigate = useNavigate();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -169,7 +171,7 @@ export function SyncPage() {
             </thead>
             <tbody>
               {history.map((job) => (
-                <tr key={job.id}>
+                <tr key={job.id} onClick={() => navigate(`/sync/${job.id}`)}>
                   <td>{formatDateTime(job.startedAt)}</td>
                   <td>{job.provider}</td>
                   <td>{job.status}</td>

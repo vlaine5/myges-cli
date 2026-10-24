@@ -16,7 +16,7 @@ export function Panel({
   );
 }
 
-export function StatusBadge({ tone, children }: PropsWithChildren<{ tone: 'ok' | 'warn' | 'muted' }>) {
+export function StatusBadge({ tone, children }: PropsWithChildren<{ tone: 'ok' | 'warn' | 'muted' | 'error' }>) {
   return <span className={`badge badge-${tone}`}>{children}</span>;
 }
 

@@ -1,3 +1,11 @@
+import type {
+  EventMatch,
+  GlobalEvent,
+  GlobalEventDetail,
+  RollbackJobResult,
+  SyncJobEventChange,
+} from './types';
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -147,8 +155,40 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload ?? {}),
     }),
-  getSyncHistory: (provider?: 'myges' | 'myefrei' | 'ensup') =>
-    request(`/sync/history${provider ? `?provider=${provider}` : ''}`),
+  getSyncHistory: (provider?: 'myges' | 'myefrei' | 'ensup', limit?: number) => {
+    const search = new URLSearchParams();
+    if (provider) search.set('provider', provider);
+    if (limit) search.set('limit', String(limit));
+    const query = search.toString();
+    return request(`/sync/history${query ? `?${query}` : ''}`);
+  },
+  // GlobalEvent read model (reconciliation tier) — the calendar-facing data source.
+  getGlobalEvents: (search: URLSearchParams) => request<GlobalEvent[]>(`/global-events?${search.toString()}`),
+  getGlobalEvent: (id: string) => request<GlobalEventDetail>(`/global-events/${id}`),
+  // Reconciliation suggestions (pending cross-provider merge candidates).
+  getReconciliationSuggestions: (provider?: string) =>
+    request<EventMatch[]>(`/reconciliation/suggestions${provider ? `?provider=${provider}` : ''}`),
+  confirmSuggestion: (matchId: string, decidedBy?: string) =>
+    request(`/reconciliation/suggestions/${matchId}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify(decidedBy ? { decidedBy } : {}),
+    }),
+  rejectSuggestion: (matchId: string, decidedBy?: string) =>
+    request(`/reconciliation/suggestions/${matchId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify(decidedBy ? { decidedBy } : {}),
+    }),
+  unlinkSnapshot: (globalEventId: string, snapshotId: string, decidedBy?: string) =>
+    request(`/reconciliation/links/${globalEventId}/unlink`, {
+      method: 'POST',
+      body: JSON.stringify({ snapshotId, ...(decidedBy ? { decidedBy } : {}) }),
+    }),
+  // Per-job sync change log + rollback.
+  getSyncJobChanges: (jobId: string) => request<SyncJobEventChange[]>(`/sync/jobs/${jobId}/changes`),
+  rollbackSyncChange: (jobId: string, changeId: string) =>
+    request<SyncJobEventChange[]>(`/sync/jobs/${jobId}/changes/${changeId}/rollback`, { method: 'POST' }),
+  rollbackSyncJob: (jobId: string) =>
+    request<RollbackJobResult>(`/sync/jobs/${jobId}/rollback`, { method: 'POST' }),
   getLatestIcsExport: () => request('/export/ics/latest'),
   downloadIcs: (params?: { save?: boolean; provider?: 'myges' | 'myefrei' | 'ensup'; refresh?: boolean; start?: string; end?: string }) => {
     const search = new URLSearchParams();

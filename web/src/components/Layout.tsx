@@ -1,11 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom';
 
 const navigation = [
-  { to: '/', label: 'Dashboard' },
+  { to: '/', label: 'Accueil' },
   { to: '/agendas', label: 'Agendas' },
   { to: '/imports', label: 'Imports ICS' },
-  { to: '/calendar', label: 'Calendrier' },
   { to: '/agenda', label: 'Evenements' },
+  { to: '/matches', label: 'Rapprochements' },
   { to: '/provider', label: 'Provider' },
   { to: '/google', label: 'Google' },
   { to: '/sync', label: 'Sync' },
