@@ -3,7 +3,6 @@ import { NavLink, Outlet } from 'react-router-dom';
 const navigation = [
   { to: '/', label: 'Accueil' },
   { to: '/agendas', label: 'Agendas' },
-  { to: '/imports', label: 'Imports ICS' },
   { to: '/agenda', label: 'Evenements' },
   { to: '/matches', label: 'Rapprochements' },
   { to: '/provider', label: 'Provider' },

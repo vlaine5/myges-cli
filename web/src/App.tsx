@@ -5,7 +5,6 @@ import { ProviderPage } from './pages/ProviderPage';
 import { GooglePage } from './pages/GooglePage';
 import { AgendaPage } from './pages/AgendaPage';
 import { AgendasPage } from './pages/AgendasPage';
-import { ImportsPage } from './pages/ImportsPage';
 import { SyncPage } from './pages/SyncPage';
 import { SyncJobDetailPage } from './pages/SyncJobDetailPage';
 import { MatchesPage } from './pages/MatchesPage';
@@ -18,7 +17,6 @@ export function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/agendas" element={<AgendasPage />} />
-        <Route path="/imports" element={<ImportsPage />} />
         <Route path="/provider" element={<ProviderPage />} />
         <Route path="/providers" element={<ProviderPage />} />
         <Route path="/google" element={<GooglePage />} />

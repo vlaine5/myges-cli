@@ -207,24 +207,6 @@ export const api = {
     if (params?.subject) search.set('subject', params.subject);
     return request(`/stats/teaching?${search.toString()}`);
   },
-  // ICS Imports
-  detectIcsProvider: (content: string) =>
-    request('/imports/detect', { method: 'POST', body: JSON.stringify({ content }) }),
-  previewIcsFile: (payload: { content: string; fallbackProvider?: string }) =>
-    request('/imports/ics/preview/file', { method: 'POST', body: JSON.stringify(payload) }),
-  previewIcsUrl: (payload: { icsUrl: string; fallbackProvider?: string }) =>
-    request('/imports/ics/preview/url', { method: 'POST', body: JSON.stringify(payload) }),
-  importIcsFile: (payload: { content: string; provider: string; name?: string; filename?: string }) =>
-    request('/imports/ics/file', { method: 'POST', body: JSON.stringify(payload) }),
-  importIcsUrl: (payload: { icsUrl: string; provider: string; name?: string }) =>
-    request('/imports/ics/url', { method: 'POST', body: JSON.stringify(payload) }),
-  listImports: () => request('/imports'),
-  getImport: (id: string) => request(`/imports/${id}`),
-  getImportEvents: (id: string) => request(`/imports/${id}/events`),
-  deleteImport: (id: string, deleteEvents: 'none' | 'future' | 'all' = 'none') =>
-    request(`/imports/${id}?deleteEvents=${deleteEvents}`, { method: 'DELETE' }),
-  reimportIcs: (id: string) =>
-    request(`/imports/${id}/reimport`, { method: 'POST' }),
   // Enrichment Rules
   listEnrichmentRules: () => request('/enrichment-rules'),
   getEnrichmentRule: (id: string) => request(`/enrichment-rules/${id}`),
