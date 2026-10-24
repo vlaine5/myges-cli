@@ -81,7 +81,23 @@ export class IcsSyncService {
     const newSnapshotIds: string[] = [];
 
     for (const normalized of collapsedEvents) {
-      if (!existingIds.has(normalized.id)) {
+      // See EventsService.refreshRange: a returning snapshot reattaches to the
+      // GlobalEvent that still names it as primary instead of colliding with it.
+      const previousGlobalEvent = existingIds.has(normalized.id)
+        ? null
+        : await this.prisma.globalEvent.findUnique({
+            where: { primarySnapshotId: normalized.id },
+            select: { id: true, retiredAt: true },
+          });
+      if (previousGlobalEvent?.retiredAt) {
+        await this.prisma.globalEvent.update({
+          where: { id: previousGlobalEvent.id },
+          data: { primarySnapshotId: null },
+        });
+      }
+      const reattachId = previousGlobalEvent && !previousGlobalEvent.retiredAt ? previousGlobalEvent.id : null;
+
+      if (!existingIds.has(normalized.id) && !reattachId) {
         newSnapshotIds.push(normalized.id);
       }
 
@@ -138,21 +154,23 @@ export class IcsSyncService {
           sourceHash: normalized.sourceHash,
           rawPayload: normalized.rawPayload,
           lastSeenAt: now,
-          globalEvent: {
-            create: {
-              title: normalized.title,
-              subject: normalized.subject,
-              startAt: normalized.startAt,
-              endAt: normalized.endAt,
-              teacher: normalized.teacher,
-              room: normalized.room,
-              campus: normalized.campus,
-              promotion: normalized.promotion,
-              groupName: normalized.group,
-              modality: normalized.modality,
-              primarySnapshotId: normalized.id,
-            },
-          },
+          globalEvent: reattachId
+            ? { connect: { id: reattachId } }
+            : {
+                create: {
+                  title: normalized.title,
+                  subject: normalized.subject,
+                  startAt: normalized.startAt,
+                  endAt: normalized.endAt,
+                  teacher: normalized.teacher,
+                  room: normalized.room,
+                  campus: normalized.campus,
+                  promotion: normalized.promotion,
+                  groupName: normalized.group,
+                  modality: normalized.modality,
+                  primarySnapshotId: normalized.id,
+                },
+              },
         },
       });
       upserted += 1;

@@ -75,7 +75,7 @@ export class EventsService {
         })
       ).map((row) => row.id),
     );
-    const newSnapshotIds = deduped.filter((event) => !existingIds.has(event.id)).map((event) => event.id);
+    const createdIds = deduped.filter((event) => !existingIds.has(event.id)).map((event) => event.id);
 
     // Events that disappeared from the current fetch (cancelled, removed from the
     // source, or left behind after switching this provider between ICS and API
@@ -103,6 +103,32 @@ export class EventsService {
       await this.prisma.eventSnapshot.deleteMany({ where: { id: { in: staleIds } } });
     }
     await this.pruneOrphanGlobalEvents();
+
+    // A snapshot that comes back after being deleted may still have its old
+    // GlobalEvent (kept because it holds a live Google event), whose unique
+    // primarySnapshotId already points at this id. Reattach to it rather than
+    // creating a second GlobalEvent: that would violate the unique constraint,
+    // and reusing it keeps the existing Google event instead of recreating it.
+    const previousGlobalEvents = await this.prisma.globalEvent.findMany({
+      where: { primarySnapshotId: { in: createdIds.length > 0 ? createdIds : ['__none__'] } },
+      select: { id: true, primarySnapshotId: true, retiredAt: true },
+    });
+    const reattachTo = new Map<string, string>();
+    const retiredToRelease: string[] = [];
+    for (const globalEvent of previousGlobalEvents) {
+      if (globalEvent.retiredAt) {
+        retiredToRelease.push(globalEvent.id);
+      } else if (globalEvent.primarySnapshotId) {
+        reattachTo.set(globalEvent.primarySnapshotId, globalEvent.id);
+      }
+    }
+    if (retiredToRelease.length > 0) {
+      await this.prisma.globalEvent.updateMany({
+        where: { id: { in: retiredToRelease } },
+        data: { primarySnapshotId: null },
+      });
+    }
+    const newSnapshotIds = createdIds.filter((id) => !reattachTo.has(id));
 
     await this.prisma.$transaction(
       deduped.map((event) =>
@@ -164,21 +190,23 @@ export class EventsService {
             // default). Reconciliation may later merge it into an existing one
             // on strong evidence — it never leaves a snapshot without a
             // GlobalEvent, so this must happen in the same write.
-            globalEvent: {
-              create: {
-                title: event.title,
-                subject: event.subject,
-                startAt: event.startAt,
-                endAt: event.endAt,
-                teacher: event.teacher,
-                room: event.room,
-                campus: event.campus,
-                promotion: event.promotion,
-                groupName: event.group,
-                modality: event.modality,
-                primarySnapshotId: event.id,
-              },
-            },
+            globalEvent: reattachTo.has(event.id)
+              ? { connect: { id: reattachTo.get(event.id)! } }
+              : {
+                  create: {
+                    title: event.title,
+                    subject: event.subject,
+                    startAt: event.startAt,
+                    endAt: event.endAt,
+                    teacher: event.teacher,
+                    room: event.room,
+                    campus: event.campus,
+                    promotion: event.promotion,
+                    groupName: event.group,
+                    modality: event.modality,
+                    primarySnapshotId: event.id,
+                  },
+                },
           },
         }),
       ),

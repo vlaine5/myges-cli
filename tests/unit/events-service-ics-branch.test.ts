@@ -373,3 +373,30 @@ describe('EventsService.deleteEvents — orphan GlobalEvent cleanup', () => {
     expect(remaining[0].id).toBe(b.globalEventId);
   });
 });
+
+describe('EventsService.refreshRange — snapshot returning after deletion', () => {
+  it('reattaches to the GlobalEvent kept for its live Google event instead of failing on primarySnapshotId', async () => {
+    const { provider } = makeFakeProvider([makeEvent({ id: 'myges:a', sourceId: 'a' })]);
+    const service = buildService(provider);
+    await service.refreshRange({ start: START, end: END });
+
+    const first = await prisma.eventSnapshot.findUniqueOrThrow({ where: { id: 'myges:a' } });
+    await prisma.eventMapping.create({
+      data: {
+        provider: 'myges',
+        globalEventId: first.globalEventId,
+        googleEventId: 'g-live',
+        lastKnownStartAt: first.startAt,
+        lastKnownEndAt: first.endAt,
+      },
+    });
+
+    await service.deleteEvents({ providerId: 'myges', scope: 'all' });
+    const result = await service.refreshRange({ start: START, end: END });
+
+    const again = await prisma.eventSnapshot.findUniqueOrThrow({ where: { id: 'myges:a' } });
+    expect(again.globalEventId).toBe(first.globalEventId);
+    expect(result.newSnapshotIds).toEqual([]);
+    expect(await prisma.globalEvent.count()).toBe(1);
+  });
+});
