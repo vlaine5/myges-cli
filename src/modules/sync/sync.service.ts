@@ -430,6 +430,24 @@ export class SyncService {
 
       const plan = planSyncActions(globalEventViews, mappings, range);
 
+      // A Google event whose GlobalEvent has lost every source snapshot (manual
+      // cleanup, or the source dropped it) has nothing left to represent, so it
+      // is deleted regardless of the sync range — otherwise anything outside the
+      // window stays on Google forever with no way to remove it from the app.
+      const plannedDeleteIds = new Set(plan.delete.map((mapping) => mapping.globalEventId));
+      const orphanMappings = await this.prisma.eventMapping.findMany({
+        where: {
+          googleEventId: { not: null },
+          deletedAt: null,
+          globalEvent: { retiredAt: null, snapshots: { none: {} } },
+        },
+      });
+      for (const mapping of orphanMappings) {
+        if (!plannedDeleteIds.has(mapping.globalEventId)) {
+          plan.delete.push(mapping);
+        }
+      }
+
       let createdCount = 0;
       let updatedCount = 0;
       let deletedCount = 0;

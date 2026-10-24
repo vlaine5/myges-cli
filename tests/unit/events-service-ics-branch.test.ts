@@ -345,3 +345,31 @@ describe('EventsService.refreshRange — stale snapshot cleanup (duplicate preve
     expect(remaining[0].title).toBe('Cours passe');
   });
 });
+
+describe('EventsService.deleteEvents — orphan GlobalEvent cleanup', () => {
+  it('removes GlobalEvents left without any source, except those still holding a live Google event', async () => {
+    const { provider } = makeFakeProvider([
+      makeEvent({ id: 'myges:a', sourceId: 'a' }),
+      makeEvent({ id: 'myges:b', sourceId: 'b', startAt: new Date('2026-05-06T08:00:00.000Z'), endAt: new Date('2026-05-06T10:00:00.000Z') }),
+    ]);
+    const service = buildService(provider);
+    await service.refreshRange({ start: START, end: END });
+
+    const b = await prisma.eventSnapshot.findUniqueOrThrow({ where: { id: 'myges:b' } });
+    await prisma.eventMapping.create({
+      data: {
+        provider: 'myges',
+        globalEventId: b.globalEventId,
+        googleEventId: 'g-123',
+        lastKnownStartAt: b.startAt,
+        lastKnownEndAt: b.endAt,
+      },
+    });
+
+    await service.deleteEvents({ providerId: 'myges', scope: 'all' });
+
+    const remaining = await prisma.globalEvent.findMany();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(b.globalEventId);
+  });
+});

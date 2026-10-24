@@ -80,6 +80,7 @@ export function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
   const [dashboard, setDashboard] = useState<any | null>(null);
   const [pendingSuggestions, setPendingSuggestions] = useState<number>(0);
@@ -331,7 +332,7 @@ export function HomePage() {
                 >
                   <span className="cal-day-num">{day.getDate()}</span>
                   <div className="cal-events">
-                    {dayEvents.slice(0, 3).map(ev => {
+                    {(expandedDay === day.toDateString() ? dayEvents : dayEvents.slice(0, 3)).map(ev => {
                       const merged = ev.snapshots.length > 1;
                       const color = providerColor(primaryProvider(ev));
                       return (
@@ -350,7 +351,15 @@ export function HomePage() {
                       );
                     })}
                     {dayEvents.length > 3 && (
-                      <span className="cal-more">+{dayEvents.length - 3} autres</span>
+                      <button
+                        type="button"
+                        className="cal-more"
+                        onClick={() =>
+                          setExpandedDay(expandedDay === day.toDateString() ? null : day.toDateString())
+                        }
+                      >
+                        {expandedDay === day.toDateString() ? 'Réduire' : `+${dayEvents.length - 3} autres`}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -379,7 +388,7 @@ export function HomePage() {
           }}>
             <h3 style={{ marginTop: 0 }}>Nettoyage des événements</h3>
             <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-              Supprime des événements du snapshot pour un provider. Les événements supprimés ne peuvent pas être restaurés sans re-synchronisation.
+              Supprime les événements d&apos;un provider de l&apos;application. Ceux déjà envoyés sur Google Calendar y seront supprimés à la prochaine synchronisation. Une nouvelle synchronisation de ce provider les recrée depuis la source.
             </p>
 
             <div className="form-grid" style={{ marginTop: '0.75rem' }}>

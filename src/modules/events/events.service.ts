@@ -102,6 +102,7 @@ export class EventsService {
     if (staleIds.length > 0) {
       await this.prisma.eventSnapshot.deleteMany({ where: { id: { in: staleIds } } });
     }
+    await this.pruneOrphanGlobalEvents();
 
     await this.prisma.$transaction(
       deduped.map((event) =>
@@ -249,7 +250,24 @@ export class EventsService {
     if (options.scope === 'future') where.startAt = { gte: new Date() };
 
     const { count } = await this.prisma.eventSnapshot.deleteMany({ where });
+    await this.pruneOrphanGlobalEvents();
     return { deletedCount: count };
+  }
+
+  /**
+   * Removes GlobalEvents left with no source snapshot. One still holding a live
+   * Google event is kept until the next sync deletes that Google event, since
+   * dropping it now would cascade away the mapping and leak the Google event.
+   * Retired (merged-away) GlobalEvents are audit history and never pruned.
+   */
+  private async pruneOrphanGlobalEvents() {
+    await this.prisma.globalEvent.deleteMany({
+      where: {
+        retiredAt: null,
+        snapshots: { none: {} },
+        OR: [{ mapping: { is: null } }, { mapping: { is: { googleEventId: null } } }],
+      },
+    });
   }
 
   async getEventById(eventId: string, includeRawPayload = true) {

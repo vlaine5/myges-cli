@@ -581,6 +581,7 @@ export class ReconciliationService {
     return this.prisma.globalEvent.findMany({
       where: {
         retiredAt: null,
+        snapshots: { some: {} },
         ...(options.start && options.end
           ? { startAt: { gte: options.start, lte: options.end } }
           : {}),

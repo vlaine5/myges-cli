@@ -126,7 +126,8 @@ export class GoogleCalendarService {
         eventId: googleEventId,
       });
     } catch (error) {
-      if ((error as { code?: number }).code === 404) {
+      const code = (error as { code?: number }).code;
+      if (code === 404 || code === 410) {
         return;
       }
 

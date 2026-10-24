@@ -435,8 +435,17 @@ tbody tr:hover {
 
 .cal-more {
   font-size: 0.68rem;
-  color: var(--text-muted);
+  color: var(--accent);
   padding: 0 4px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cal-more:hover {
+  text-decoration: underline;
 }
 
 .checkbox-label {
