@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    container_name: myges-app
+    env_file:
+      - .env
+    environment:
+      APP_SECRET: ${APP_SECRET:-local-docker-secret-change-me}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    init: true

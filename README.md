@@ -1,116 +1,456 @@
-# MyGES CLI
+# Academic Sync
 
-A Command Line Interface replacement for MyGES ([Réseau GES](http://www.reseau-ges.fr/)' Extranet).
+Application personnelle de synchronisation d’agenda académique.
 
-# How to install
-You need to have [npm](https://www.npmjs.com/get-npm) installed.
+Le dépôt a été remis en état autour d’une seule stack:
+
+- backend Express en TypeScript
+- frontend React/Vite
+- persistance SQLite + Prisma
+- scheduler interne
+- export ICS
+- synchronisation Google Calendar
+- architecture multi-provider
+
+## État réel du projet
+
+Ce qui fonctionne aujourd’hui:
+
+- `myges` en live: auth, test connexion, récupération agenda, `studentCount`, sync dry-run, export ICS
+- `myefrei` via modèle multi-provider, UI, API, cache, stats et export ICS depuis le cache
+- `ensup` / HyperPlanning via architecture provider, UI, ICS, stats, filtres et export ICS
+- Google OAuth côté backend avec calendrier sélectionnable par provider
+- dashboard, agenda, sync, Google, settings, heures d’enseignement
+- Docker monolithique simple
+
+Limites réelles:
+
+- `myefrei` bloque le login automatisé username/password avec reCAPTCHA
+- pour `myefrei`, la voie fiable reste `session cookie` + `agendaEndpoint`, ou un flux ICS si disponible
+- le code Google est testé côté statut/OAuth start; je n’ai pas forcé de déconnexion ni modifié de mapping Google live pendant la validation
+
+## Architecture
+
+Le cœur métier repose sur un modèle d’événement normalisé commun.
+
+Principaux modules:
+
+- `src/modules/providers`: providers académiques
+- `src/modules/events`: normalisation, déduplication, filtres de présentation
+- `src/modules/sync`: sync Google et sync ICS
+- `src/modules/google`: OAuth et opérations Calendar
+- `src/modules/export`: export ICS
+- `src/modules/settings`: settings applicatifs
+- `src/routes`: API HTTP
+- `web/`: frontend React
+- `prisma/`: schéma SQLite et migrations
+
+## Providers
+
+Providers actuellement câblés:
+
+- `myges`
+- `myefrei`
+- `ensup`
+
+Le provider actif est stocké dans `AppSettings.provider`, mais:
+
+- les snapshots d’événements sont taggés par provider
+- les jobs de sync sont taggés par provider
+- les calendriers Google sélectionnés sont taggés par provider
+- l’export ICS peut être demandé par provider
+
+## Modèle normalisé
+
+Champs principaux:
+
+- `id = ${provider}:${sourceId}`
+- `provider`
+- `sourceId`
+- `reservationId`
+- `title`
+- `subject`
+- `startAt`
+- `endAt`
+- `teacher`
+- `room`
+- `campus`
+- `promotion`
+- `group`
+- `classes`
+- `modality`
+- `studentCount`
+- `disciplineName`
+- `disciplineTeacher`
+- `disciplineId`
+- `rawPayload`
+- `sourceHash`
+
+La sync Google, l’API, l’export ICS et les stats ne dépendent pas directement de MyGES.
+
+## `studentCount`
+
+Source par provider:
+
+- `myges`: `agenda[].discipline.nb_students`
+- `myefrei`: premier champ numérique valide parmi `studentCount`, `nb_students`, `classSize`, `discipline.nb_students`, puis valeurs structurées éventuelles dans les détails si présentes
+- `ensup`: `studentCount`, `nb_students`, `nbStudents`, `effectif`, `nbEleves` si présents, sinon `null`
+
+Règle:
+
+- si l’information n’existe pas, la valeur renvoyée reste `null`
+- aucune valeur n’est inventée
+
+## Groupes myEfrei
+
+Les groupes sont récupérés de deux façons:
+
+- depuis les champs natifs quand ils existent (`group`, `class`, `studentGroup`, `discipline.student_group_name`, `classes`)
+- depuis les descriptions structurées du type `Groupe(s): B3-CS-FISA2`
+
+Le parsing structuré supporte aussi:
+
+- `Code module`
+- `Enseignant(s)`
+- `Modalité`
+- `Activité`
+- `Nombre d’élèves` si la donnée existe
+
+Les groupes remontent dans:
+
+- l’API `/api/events`
+- la page Agenda
+- la page Heures d’enseignement
+- les descriptions Google
+- l’export ICS
+
+## Exclusion ENSUP / HyperPlanning
+
+Les événements ENSUP non souhaités sont exclus à l’affichage, des stats, de l’export ICS et de la sync issue du modèle normalisé.
+
+Logique actuelle:
+
+- provider `ensup`
+- mots-clés de type `Férié`, `Jour férié`, `Vacances`
+- absence de métadonnées pédagogiques réelles (pas d’enseignant, pas de classes, pas de groupe, pas de promotion)
+
+Cette logique est centralisée dans `src/modules/events/presentation.ts`.
+
+## Déduplication
+
+Deux niveaux de déduplication sont appliqués:
+
+1. déduplication stricte par identifiant normalisé `id`
+2. collapse des doublons équivalents visibles, pour éviter les doubles séances importées avec une version pauvre puis une version enrichie
+
+Le collapse “équivalent” compare notamment:
+
+- provider
+- début / fin
+- titre / matière
+- salle
+- enseignant
+- groupes / classes
+
+La version la plus riche est gardée.
+
+Conséquences:
+
+- les vues API/UI/stats n’affichent plus les doublons évidents
+- l’export ICS depuis le cache n’exporte plus les doublons visibles
+- la sync ICS supprime aussi les doublons futurs équivalents qui disparaissent du flux
+
+## Heures d’enseignement
+
+La page `/teaching` agrège les heures par classe / groupe sur une période donnée.
+
+Elle supporte:
+
+- filtre période
+- filtre provider
+- filtre matière
+- total heures
+- nombre de séances
+- étudiant(s) par classe quand la donnée existe
+
+L’historique est conservé en base locale:
+
+- les événements passés ne sont pas supprimés quand ils disparaissent ensuite de certains flux
+- les futures disparitions dans un flux ICS entraînent seulement la suppression des événements futurs correspondants
+
+## Google Calendar
+
+Fonctions disponibles dans l’UI `/google`:
+
+- voir le statut OAuth
+- connecter / reconnecter
+- déconnecter
+- voir les calendriers disponibles
+- sélectionner un calendrier par provider
+- créer un calendrier et le sélectionner pour un provider
+
+Configuration:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URL`
+
+Le mapping est provider-aware:
+
+- `myges` peut cibler un agenda Google
+- `myefrei` peut en cibler un autre
+- `ensup` peut en cibler un autre
+
+## myEfrei
+
+Modes supportés:
+
+- `username/password`
+- `session cookie`
+- `session cookie + agendaEndpoint`
+- ICS si un flux est disponible
+
+État réel:
+
+- le login automatisé username/password est bloqué ici par reCAPTCHA
+- le cookie collé depuis le navigateur est désormais utilisé brut, sans décodage destructif
+- le test de session vérifie la présence minimale de `myefrei.sid=...`
+- l’URL `agendaEndpoint` doit être la vraie requête JSON/XHR de l’agenda
+
+Pour trouver `agendaEndpoint`:
+
+1. se connecter à myEfrei dans le navigateur
+2. ouvrir DevTools > Network
+3. filtrer `Fetch/XHR`
+4. recharger la page agenda
+5. copier la `Request URL` de la requête qui renvoie le JSON des cours
+
+## ENSUP / HyperPlanning
+
+Le provider `ensup` cible `https://extranet-hp-sqy.ensup.eu`.
+
+Modes supportés:
+
+- ICS
+- session cookie + agenda endpoint
+- tentative username/password côté HyperPlanning quand le portail l’accepte
+
+Variables supportées:
+
+- `ENSUP_USERNAME`
+- `ENSUP_PASSWORD`
+- `ENSUP_SESSION_COOKIE`
+- `ENSUP_AGENDA_ENDPOINT`
+- `ENSUP_ICS_URL`
+
+## API
+
+Routes principales:
+
+- `GET /api/health`
+- `GET /api/diagnostics`
+- `GET /api/dashboard`
+- `GET /api/settings`
+- `PUT /api/settings`
+- `GET /api/providers/status`
+- `GET /api/providers/:provider/status`
+- `POST /api/providers/:provider/login`
+- `POST /api/providers/:provider/connect`
+- `POST /api/providers/:provider/test`
+- `PATCH /api/providers/:provider/config`
+- `GET /api/events?provider=&start=&end=&refresh=`
+- `GET /api/events/:id`
+- `POST /api/sync/run`
+- `POST /api/sync/dry-run`
+- `GET /api/sync/history?provider=`
+- `GET /api/export/ics?provider=&start=&end=&save=&refresh=`
+- `GET /api/export/ics/latest`
+- `POST /api/ics/sync`
+- `GET /api/stats/teaching?provider=&start=&end=&subject=`
+- `GET /api/google/status`
+- `GET /api/google/config`
+- `PUT /api/google/config`
+- `POST /api/google/oauth/start`
+- `GET /api/google/oauth/callback`
+- `POST /api/google/disconnect`
+- `GET /api/google/calendars`
+- `POST /api/google/calendars`
+- `PUT /api/google/calendar`
+
+## Frontend
+
+Pages utiles:
+
+- `/` dashboard
+- `/provider` ou `/providers`
+- `/google`
+- `/agenda` ou `/events`
+- `/sync`
+- `/teaching`
+- `/settings`
+
+Ce qui est branché:
+
+- appels API réels
+- états loading/error
+- sélection du provider actif
+- test connexion providers
+- choix du provider dans la sync manuelle
+- filtre matière dans les heures d’enseignement
+- export ICS par provider
+
+## Lancement local
+
+Prérequis:
+
+- Node.js 20 recommandé
+- npm
+
+Installation:
+
 ```bash
-npm i -g myges
+cp .env.example .env
+npm install
+npm run build
+npm start
 ```
 
-# Usage
-**Authenticate with `myges login`** (only needed once).
+UI production:
+
+- `http://localhost:3000`
+
+API:
+
+- `http://localhost:3000/api`
+
+## Développement
+
 ```bash
-myges help
-```
-```
-Usage: myges [options] [command]
-
-Options:
-  -V, --version                     output the version number
-  -d, --debug                       debug mode
-  -h, --help                        display help for command
-
-Commands:
-  absences [options] [year]         list absences
-  agenda [options] [week]           fetch agenda
-  calendar-sync [days]              sync myges calendar with Google Calendar
-  contribute                        show useful links
-  courses [options] [year]          list courses
-  grades [options] [year]           list grades
-  login [options]                   sign in to an account
-  logout [options]                  remove the saved auth informations
-  projects                          manage projects
-  request [options] <method> <url>  make a request to the API
+npm run dev
 ```
 
-## Agenda
-The `agenda` command is a little special since it offers diverse options in order to ease its use.
+Cela lance:
 
-### Listing weeks
-You can list and select the week to display by using the `-i` option (alias of `--interactive`).
+- backend watch
+- frontend Vite
 
-### Manual week selection
-It's possible to manually specify the wanted week. Here's some possibilities:
-- `myges agenda 19-03-2020` -> Shows the week from last Sunday to next Sunday of the date `19-03-2020`
-- `myges agenda 19-03` -> Shows the week from last Sunday to next Sunday of `March 19` of the current year
-- `myges agenda 19` -> Shows the week from last Sunday to next Sunday of the day `19` of the current month and year
-- `myges agenda today` -> Displays today's agenda
-- `myges agenda tomorrow` -> Displays tomorrow's agenda
-- `myges agenda yesterday` -> Displays yesterday's agenda
+URLs:
 
-A shifting can be added to the specified week:
-- `myges agenda today+2` -> Shows the agenda of 2 days from today
-- `myges agenda today+-2` -> Shows the agenda of 2 days ago from today
+- UI Vite: `http://localhost:5173`
+- proxy API Vite: `/api`
 
-Those shifts can be applied to any manual week input using the same format (`+n`).
+## Docker
 
-## Project management
-Using the CLI, you can list available projects and project groups.
-You can also join or quit a project group.
+```bash
+cp .env.example .env
+docker-compose up --build -d
+```
 
-- `myges projects` -> List available projects
-- `myges project <id>` -> Give information about the selected project (replace *`<id>`* by the actual group's id given in the projects list)
-- `myges project <id> groups` -> List available groups for the specified project
-- `myges project <id> join [group]` -> Join a group. You can specify the group by replacing the optional *`[group]`* argument, else it will prompt a selector
-- `myges project <id> quit` -> Quit the current group you're in. A confirmation will be required before executing the request
+Accès:
 
-## Calendar Sync
+- UI/API: `http://localhost:3000`
 
-This command allows you to syncronize your calendar on goocle calendar (and thus no longer use the myges planning!).
+Persistance:
 
-- `myges calendar-sync <days>` -> Sync google calendar from today to given number of days
-- `myges calendar-sync --reset_credentials` -> Reset google credentials and ask it again
-- `myges calendar-sync --reset_calendar` -> Reset google calendar ID and ask it again
-- You need to setup few things before using this script.
+- `./data:/app/data`
 
-### Setup Google API
+## Variables d’environnement
 
-To make the script work, you need to create a google calendar API and save its information like this :
+Variables principales:
 
-* Go to [https://developers.google.com/calendar/quickstart/php](https://developers.google.com/calendar/quickstart/php)
-* Create a Google Calendar API project
+- `NODE_ENV`
+- `HOST`
+- `PORT`
+- `APP_BASE_URL`
+- `APP_SECRET`
+- `DATABASE_URL`
+- `APP_DATA_DIR`
+- `LOG_LEVEL`
+- `ACADEMIC_PROVIDER`
 
-|                                           |                                           |
-| ----------------------------------------- | ----------------------------------------- |
-| ![image](https://i.imgur.com/xZkQC03.png) | ![image](https://i.imgur.com/QVQ6vH2.png) |
-| ![image](https://i.imgur.com/AmHIOfb.png) |                                           |
+MyGES:
 
-* Save the `credentials.json` file, you will need information inside it at first time.
+- `MYGES_USERNAME`
+- `MYGES_PASSWORD`
 
-![image](https://i.imgur.com/XxVO6z5.png)
+myEfrei:
 
-### Create new Google Calendar
+- `MYEFREI_USERNAME`
+- `MYEFREI_PASSWORD`
+- `MYEFREI_SESSION_COOKIE`
+- `MYEFREI_AGENDA_ENDPOINT`
 
-> :warning: Be sure to create a calendar dedicated ONLY to your schedule! Otherwise the script will delete the other events present in your calendar ...
+Ensup:
 
-To retrieve your calendar id:
+- `ENSUP_USERNAME`
+- `ENSUP_PASSWORD`
+- `ENSUP_SESSION_COOKIE`
+- `ENSUP_AGENDA_ENDPOINT`
+- `ENSUP_ICS_URL`
 
-* Go to https://calendar.google.com
+Google:
 
-* Go to "Settings and sharing" of the calendar dedicated to your planning
-  ![image](https://i.imgur.com/QAZPssf.png)
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URL`
+- `GOOGLE_OAUTH_SCOPES`
+- `GOOGLE_DEFAULT_CALENDAR_ID`
 
-* You will find the id of your calendar in the section "Integrate the calendar"
-  ![image](https://i.imgur.com/1p0Ra2q.png)
+Sync:
 
-### First launch
+- `SYNC_ENABLED`
+- `SYNC_LOOKBACK_DAYS`
+- `SYNC_FUTURE_DAYS`
+- `SYNC_FREQUENCY_MINUTES`
+- `SYNC_RUN_ON_STARTUP`
+- `GOOGLE_SYNC_ENABLED`
+- `SAVE_LAST_ICS`
+- `STORE_RAW_PAYLOAD`
+- `TIMEZONE`
 
-At the first launch, you will be asked to enter the various information that you have configured before.
+## Tests
 
-If this is the first connection, follow the terminal's instructions to retrieve the `google connection token`
+Commandes:
 
-> When you click on the Google url, don't forget to copy the given authorization token and paste it into the CLI
+```bash
+npm run lint
+npm test
+npm run build
+```
 
+Tests utiles présents:
 
-  ![image-20211121185850513](images/README/image-20211121185850513.png)
+- mapping MyGES
+- mapping myEfrei
+- parsing descriptions structurées
+- exclusion ENSUP
+- déduplication visible
+- provider registry
+- plan de sync idempotent
+
+## Troubleshooting
+
+`MYEFREI_SESSION_EXPIRED`
+
+- le cookie est syntaxiquement accepté mais refusé par le portail
+- reconnecte-toi dans le navigateur et recopie le header `Cookie`
+
+`MYEFREI_ENDPOINT_NOT_CONFIGURED`
+
+- le provider myEfrei n’a pas d’`agendaEndpoint`
+- configure l’URL XHR JSON de l’agenda, ou utilise le flux ICS si tu travailles depuis le cache
+
+`GOOGLE_NOT_CONFIGURED`
+
+- configure Google OAuth dans `.env` ou dans l’interface `/google`
+
+`EADDRINUSE`
+
+- un autre service écoute déjà sur le port demandé
+- en local, lance par exemple `PORT=3001 APP_BASE_URL=http://localhost:3001 npm start`
+
+Base SQLite dupliquée (`prisma/data/app.db`)
+
+- la base réelle de l'application vit à `./data/app.db` (voir `DATABASE_URL` dans `.env`), résolue par rapport à la racine du dépôt
+- ne lance jamais `npx prisma studio` / `npx prisma migrate dev` sans `DATABASE_URL` explicitement défini en absolu: Prisma résout un chemin relatif dans `schema.prisma` par rapport au dossier `prisma/`, pas à la racine, ce qui recrée une base fantôme sous `prisma/data/`
+- si ce fichier réapparaît, il peut être supprimé sans risque (il n'est jamais lu par l'application)

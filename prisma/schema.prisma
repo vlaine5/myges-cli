@@ -1,0 +1,260 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AppSettings {
+  id                   Int      @id @default(1)
+  provider             String   @default("myges")
+  timezone             String   @default("Europe/Paris")
+  syncEnabled          Boolean  @default(false)
+  syncLookbackDays     Int      @default(7)
+  syncFutureDays       Int      @default(30)
+  syncFrequencyMinutes Int      @default(30)
+  syncDayOfWeek        Int?
+  syncHour             Int      @default(6)
+  runSyncOnStartup     Boolean  @default(false)
+  googleSyncEnabled    Boolean  @default(false)
+  saveLastIcs          Boolean  @default(true)
+  storeRawPayload      Boolean  @default(false)
+  logLevel             String   @default("info")
+  updatedAt            DateTime @updatedAt
+}
+
+model AgendaConfig {
+  id               String    @id @default(cuid())
+  name             String
+  provider         String
+  fetchMode        String    @default("api")
+  icsUrlEncrypted  String?
+  enabled          Boolean   @default(true)
+  syncEnabled      Boolean   @default(false)
+  syncDayOfWeek    Int?
+  syncHour         Int       @default(6)
+  lookbackDays     Int       @default(7)
+  lookaheadDays    Int       @default(30)
+  googleCalendarId String?
+  lastSyncAt       DateTime?
+  lastSyncStatus   String?
+  lastSyncError    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([provider])
+  @@index([syncEnabled])
+}
+
+model AcademicProviderCredential {
+  provider             String   @id
+  authMode             String?
+  username             String?
+  passwordEncrypted    String?
+  accessToken          String?
+  tokenType            String?
+  accessTokenExpiresAt DateTime?
+  sessionCookieEncrypted String?
+  configJson           String?
+  lastLoginAt          DateTime?
+  lastLoginError       String?
+  updatedAt            DateTime @updatedAt
+}
+
+model GoogleConnection {
+  id                    Int      @id @default(1)
+  clientIdEncrypted     String?
+  clientSecretEncrypted String?
+  oauthRedirectUrl      String?
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  tokenType             String?
+  scope                 String?
+  expiryDate            DateTime?
+  connectedEmail        String?
+  calendarId            String?
+  calendarSummary       String?
+  updatedAt             DateTime @updatedAt
+}
+
+model GoogleProviderCalendar {
+  provider        String   @id
+  calendarId      String?
+  calendarSummary String?
+  updatedAt       DateTime @updatedAt
+}
+
+model OAuthState {
+  state     String   @id
+  provider  String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model EventSnapshot {
+  id                String       @id
+  provider          String
+  // agendaId links to AgendaConfig.id — set when synced via an agenda, null for manual imports
+  agendaId          String?
+  sourceId          String
+  reservationId     Int?
+  title             String
+  subject           String?
+  startAt           DateTime
+  endAt             DateTime
+  teacher           String?
+  room              String?
+  campus            String?
+  roomsJson         String?
+  promotion         String?
+  groupName         String?
+  classesJson       String?
+  modality          String?
+  reservationType   String?
+  studentCount      Int?
+  disciplineName    String?
+  disciplineTeacher String?
+  disciplineId      Int?
+  sourceHash        String
+  rawPayload        String?
+  lastSeenAt        DateTime
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  mapping           EventMapping?
+
+  @@index([startAt])
+  @@index([reservationId])
+  @@index([provider, startAt])
+  @@index([agendaId])
+}
+
+model EventMapping {
+  id             String        @id @default(cuid())
+  provider       String
+  sourceEventId  String        @unique
+  googleEventId  String?
+  lastSyncedHash String?
+  lastKnownStartAt DateTime
+  lastKnownEndAt DateTime
+  lastAction     String?
+  lastSyncedAt   DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  event          EventSnapshot @relation(fields: [sourceEventId], references: [id], onDelete: Cascade)
+
+  @@index([lastKnownStartAt])
+  @@index([provider, lastKnownStartAt])
+}
+
+model SyncJob {
+  id             String   @id @default(cuid())
+  provider       String
+  trigger        String
+  dryRun         Boolean  @default(false)
+  status         String
+  rangeStart     DateTime
+  rangeEnd       DateTime
+  eventsFetched  Int      @default(0)
+  eventsDeduped  Int      @default(0)
+  createdCount   Int      @default(0)
+  updatedCount   Int      @default(0)
+  deletedCount   Int      @default(0)
+  unchangedCount Int      @default(0)
+  exportedCount  Int      @default(0)
+  errorMessage   String?
+  summary        String?
+  startedAt      DateTime @default(now())
+  finishedAt     DateTime?
+
+  @@index([startedAt])
+  @@index([provider, startedAt])
+}
+
+model IcsImport {
+  id                  String    @id @default(cuid())
+  name                String
+  sourceType          String    // 'manual_upload' | 'manual_url'
+  provider            String    // final provider used for events
+  detectedProvider    String?   // provider detected from ICS metadata
+  detectionConfidence String?   // 'high' | 'medium' | 'low' | 'none'
+  icsUrl              String?   // for manual_url source type
+  originalFilename    String?   // for manual_upload source type
+  status              String    @default("SUCCESS") // SUCCESS | FAILED
+  fetchedCount        Int       @default(0)
+  createdCount        Int       @default(0)
+  updatedCount        Int       @default(0)
+  duplicateCount      Int       @default(0)
+  skippedCount        Int       @default(0)
+  errorMessage        String?
+  removedFutureCount  Int       @default(0)
+  keptPastCount       Int       @default(0)
+  importedAt          DateTime  @default(now())
+  lastReimportAt      DateTime?
+  updatedAt           DateTime  @updatedAt
+
+  @@index([importedAt])
+  @@index([provider])
+}
+
+// Tracks which EventSnapshot rows were created/seen by each IcsImport.
+// Enables: listing events per import, sync semantics on reimport, safe delete.
+model IcsImportEvent {
+  importId String
+  eventId  String
+
+  @@id([importId, eventId])
+  @@index([importId])
+  @@index([eventId])
+}
+
+model IcsExport {
+  id         String   @id @default(cuid())
+  provider   String
+  path       String
+  eventCount Int
+  rangeStart DateTime
+  rangeEnd   DateTime
+  generatedAt DateTime @default(now())
+
+  @@index([generatedAt])
+  @@index([provider, generatedAt])
+}
+
+// Persistent enrichment rules that are re-applied during ICS preview and import.
+// A rule matches events by criteria (provider, class substring, subject substring, room, keywords)
+// and injects field values that override the parsed result.
+model EventEnrichmentRule {
+  id   String @id @default(cuid())
+  name String
+
+  // Match criteria (all conditions are ANDed; omit a field to match any value)
+  matchProvider    String?  // exact provider id: 'myges' | 'myefrei' | 'ensup' | 'generic'
+  matchClassLike   String?  // case-insensitive substring match on any class name
+  matchSubjectLike String?  // case-insensitive substring match on subject / title
+  matchRoomLike    String?  // case-insensitive substring match on room / location
+  matchKeywords    String?  // JSON array of strings — all must appear in title+subject+description
+
+  // Values to inject when the rule matches (null = do not override)
+  injectProvider     String?
+  injectClass        String?
+  injectSubject      String?
+  injectTeacher      String?
+  injectRoom         String?
+  injectCampus       String?
+  injectStudentCount Int?
+  injectModality     String?
+
+  // Higher priority rules win when multiple rules match.
+  priority  Int     @default(0)
+  enabled   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled])
+  @@index([matchProvider])
+}

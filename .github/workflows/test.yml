@@ -3,56 +3,54 @@ name: Test
 on: [push, pull_request]
 
 jobs:
-  test-runtime:
+  test:
     strategy:
       matrix:
         os:
           - ubuntu-latest
           - macos-latest
-          - windows-latest
         node:
-          - 12
-          - 14
-          - 15
-          - 16
+          - 18
+          - 20
+          - 22
 
     runs-on: ${{ matrix.os }}
 
-    name: Test runtime for ${{ matrix.os }} using Node ${{ matrix.node }}
+    name: Test on ${{ matrix.os }} / Node ${{ matrix.node }}
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Setup node
-        uses: actions/setup-node@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+          cache: npm
 
       - run: npm ci
       - run: npm run build
-      - run: chmod +x ./dist/cli.js
-      - run: ./dist/cli.js
+      - run: npm test
 
-  test-runtime-container:
+  test-container:
     strategy:
       matrix:
         image:
-          - node:12-alpine
-          - node:14-alpine
-          - node:15-alpine
-          - node:16-alpine
+          - node:18-bookworm-slim
+          - node:20-bookworm-slim
 
     runs-on: ubuntu-latest
     container: ${{ matrix.image }}
 
-    name: Test runtime in container using ${{ matrix.image }}
+    name: Test in container ${{ matrix.image }}
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: apt-get update && apt-get install -y --no-install-recommends python3 make g++
 
       - run: npm ci
       - run: npm run build
-      - run: chmod +x ./dist/cli.js
-      - run: ./dist/cli.js
+      - run: npm test

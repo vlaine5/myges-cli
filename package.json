@@ -1,57 +1,63 @@
 {
-  "name": "myges",
-  "version": "4.7.1",
-  "description": "",
-  "keywords": [],
-  "main": "dist/index.js",
+  "name": "myges-app",
+  "version": "5.1.0",
+  "private": true,
+  "description": "Personal academic sync service with multi-provider API, web UI, SQLite persistence and Google Calendar integration.",
+  "engines": {
+    "node": ">=18.18.0"
+  },
   "scripts": {
-    "start": "node dist/cli.js",
-    "dev": "nodemon .",
-    "build": "tsc",
-    "lint": "eslint src/**/*.ts --fix",
-    "prepare": "npm run build"
+    "dev": "concurrently -k -n api,web \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "tsx watch src/server.ts",
+    "dev:web": "vite --host 0.0.0.0",
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "tsc -p tsconfig.server.json",
+    "build:web": "vite build",
+    "start": "node dist/server/server.js",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prisma:generate": "prisma generate",
+    "sync:once": "tsx src/scripts/run-sync.ts",
+    "export:ics": "tsx src/scripts/export-ics.ts"
   },
-  "files": [
-    "dist"
-  ],
-  "bin": {
-    "myges": "dist/cli.js"
-  },
-  "contributors": [
-    {
-      "name": "Nathanael Demacon",
-      "email": "nathanael.dmc@outlook.fr"
-    }
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/quantumsheep/myges-cli.git"
-  },
-  "author": "Nathanael Demacon <nathanael.dmc@outlook.fr>",
-  "license": "MIT",
   "dependencies": {
-    "axios": "^0.25.0",
-    "cli-progress": "^3.10.0",
-    "colors": "^1.4.0",
-    "commander": "^9.0.0",
-    "inquirer": "^8.2.0",
-    "date-fns": "^2.28.0",
-    "googleapis": "^95.0.0",
-    "moment": "^2.29.1",
-    "update-notifier": "^5.1.0"
+    "@prisma/client": "^5.22.0",
+    "better-sqlite3": "^12.8.0",
+    "concurrently": "^9.0.1",
+    "date-fns": "^3.6.0",
+    "date-fns-tz": "^3.2.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "googleapis": "^144.0.0",
+    "pino": "^9.5.0",
+    "pino-http": "^10.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/inquirer": "^8.2.0",
-    "@types/update-notifier": "^5.1.0",
-    "@typescript-eslint/eslint-plugin": "^5.11.0",
-    "@typescript-eslint/parser": "^5.11.0",
-    "eslint": "^8.9.0",
-    "eslint-config-airbnb-base": "^15.0.0",
-    "@types/cli-progress": "^3.9.2",
-    "eslint-config-prettier": "^8.3.0",
-    "eslint-plugin-import": "^2.25.4",
-    "eslint-plugin-prettier": "^4.0.0",
-    "prettier": "^2.5.1",
-    "typescript": "^4.5.5"
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^5.0.0",
+    "@types/node": "^18.19.67",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/supertest": "^6.0.2",
+    "@typescript-eslint/eslint-plugin": "^8.13.0",
+    "@typescript-eslint/parser": "^8.13.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "prettier": "^3.3.3",
+    "prisma": "^5.22.0",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
   }
 }

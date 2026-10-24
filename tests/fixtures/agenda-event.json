@@ -1,0 +1,35 @@
+{
+  "reservation_id": 1827575,
+  "rooms": [
+    {
+      "room_id": 12,
+      "name": "B12",
+      "floor": "2",
+      "campus": "VOLTAIRE1",
+      "color": "#fff",
+      "latitude": "0",
+      "longitude": "0"
+    }
+  ],
+  "type": "Cours",
+  "modality": "Presentiel",
+  "author": 2951,
+  "create_date": null,
+  "start_date": 1736168400000,
+  "end_date": 1736173800000,
+  "state": "PUBLISHED",
+  "comment": null,
+  "classes": ["Groupe SRC Janvier"],
+  "name": "S2 - conteneurs et devops",
+  "discipline": {
+    "name": "S2 - conteneurs et devops",
+    "teacher": "M. LAINE",
+    "nb_students": 6,
+    "rc_id": 293848,
+    "student_group_name": "4 ESGI - SRC Janvier S2"
+  },
+  "teacher": "M. LAINE",
+  "promotion": "4 ESGI",
+  "prestation_type": 2,
+  "is_electronic_signature": false
+}
