@@ -10,7 +10,8 @@ services:
     environment:
       APP_SECRET: ${APP_SECRET:-local-docker-secret-change-me}
     ports:
-      - "3000:3000"
+      # Port externe personnalisable par deploiement (ex: MYGES_PORT=3051 dans .env).
+      - "${MYGES_PORT:-3000}:3000"
     volumes:
       - ./data:/app/data
     restart: unless-stopped
