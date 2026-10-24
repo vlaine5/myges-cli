@@ -5,6 +5,12 @@ import { formatDateTime } from '../lib/format';
 
 type ProviderId = 'myges' | 'myefrei' | 'ensup';
 
+function readHasIcsUrl(config: Record<string, unknown> | undefined | null): boolean {
+  if (!config) return false;
+  if (typeof config.hasIcsUrl === 'boolean') return config.hasIcsUrl;
+  return Boolean(config.icsUrl);
+}
+
 export function ProviderPage() {
   const [settings, setSettings] = useState<any | null>(null);
   const [status, setStatus] = useState<any | null>(null);
@@ -18,7 +24,8 @@ export function ProviderPage() {
   const [agendaEndpoint, setAgendaEndpoint] = useState('');
   const [icsUrl, setIcsUrl] = useState('');
   const [hasStoredIcsUrl, setHasStoredIcsUrl] = useState(false);
-  const [icsSyncing, setIcsSyncing] = useState(false);
+  const [icsSaving, setIcsSaving] = useState(false);
+  const [icsTesting, setIcsTesting] = useState(false);
   const [icsResult, setIcsResult] = useState<string | null>(null);
 
   const provider = (settings?.provider ?? 'myges') as ProviderId;
@@ -34,7 +41,7 @@ export function ProviderPage() {
       setStatus(providerStatus);
       setAgendaEndpoint(String((providerStatus as any).config?.agendaEndpoint ?? ''));
       setIcsUrl('');
-      setHasStoredIcsUrl(Boolean((providerStatus as any).config?.hasIcsUrl));
+      setHasStoredIcsUrl(readHasIcsUrl((providerStatus as any).config));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Impossible de charger le provider.');
     } finally {
@@ -68,7 +75,7 @@ export function ProviderPage() {
       setSessionCookie('');
       setAgendaEndpoint(String((providerStatus as any).config?.agendaEndpoint ?? ''));
       setIcsUrl('');
-      setHasStoredIcsUrl(Boolean((providerStatus as any).config?.hasIcsUrl));
+      setHasStoredIcsUrl(readHasIcsUrl((providerStatus as any).config));
       setSuccess(`Provider actif change vers ${nextProvider}.`);
     } catch (changeError) {
       setError(changeError instanceof Error ? changeError.message : 'Changement de provider impossible.');
@@ -95,22 +102,41 @@ export function ProviderPage() {
     };
   }
 
-  async function handleIcsSync() {
-    if (!icsUrl) return;
-    setIcsSyncing(true);
+  async function handleIcsSave() {
+    setIcsSaving(true);
+    setIcsResult(null);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await api.patchProviderConfig(provider, {
+        icsUrl: icsUrl.trim() ? icsUrl.trim() : null,
+      }) as { ok: boolean; status: any };
+      setStatus(result.status);
+      setHasStoredIcsUrl(readHasIcsUrl(result.status?.config));
+      setSuccess(
+        icsUrl.trim()
+          ? `URL ICS enregistree pour ${provider}. Elle sera utilisee pour toutes les synchronisations.`
+          : `URL ICS retiree pour ${provider}. L API/identifiants seront utilises a nouveau.`,
+      );
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Enregistrement de l URL ICS impossible.');
+    } finally {
+      setIcsSaving(false);
+    }
+  }
+
+  async function handleIcsTest() {
+    if (!icsUrl.trim()) return;
+    setIcsTesting(true);
     setIcsResult(null);
     setError(null);
     try {
-      const result = await api.syncFromIcs({ provider, icsUrl }) as any;
-      setHasStoredIcsUrl(true);
-      setIcsUrl('');
-      setIcsResult(
-        `Sync ICS OK — ${result.fetched} evenements recus, ${result.upserted} mis a jour, ${result.deletedFuture} futurs supprimes, ${result.cancelled} annules.`,
-      );
-    } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : 'Sync ICS impossible.');
+      const result = await api.previewIcs(icsUrl.trim());
+      setIcsResult(`Lien valide — ${result.eventCount} evenement(s) trouve(s) dans le flux.`);
+    } catch (testError) {
+      setError(testError instanceof Error ? testError.message : 'Test du lien ICS impossible.');
     } finally {
-      setIcsSyncing(false);
+      setIcsTesting(false);
     }
   }
 
@@ -153,7 +179,7 @@ export function ProviderPage() {
         setStatus(result.status);
         setPassword('');
         setSessionCookie('');
-        setHasStoredIcsUrl(Boolean((result.status as any)?.config?.hasIcsUrl));
+        setHasStoredIcsUrl(readHasIcsUrl((result.status as any)?.config));
         setSuccess(`Configuration ${provider} enregistree.`);
       }
     } catch (submitError) {
@@ -219,6 +245,11 @@ export function ProviderPage() {
       <Panel title="Configuration provider">
         <ErrorCallout message={error} />
         <SuccessCallout message={success} />
+        <p className="meta-line">
+          Si une URL ICS est enregistrée pour ce provider (panneau ci-dessous), elle est utilisée
+          à la place de la connexion API/identifiants pour toutes les synchronisations (planifiées
+          et manuelles). Laisse le champ ICS vide pour utiliser l&apos;API/identifiants ci-dessous.
+        </p>
 
         <div className="form-grid">
           <label>
@@ -302,7 +333,12 @@ export function ProviderPage() {
 
       <Panel title="Lien ICS (optionnel)">
         <p className="meta-line">
-          Si le provider propose un lien ICS public (ex: myEfrei), tu peux le coller ici pour synchroniser ton agenda.
+          Si une URL ICS est enregistrée ici, elle remplace la connexion API/identifiants
+          ci-dessus comme source pour toutes les synchronisations de ce provider (planifiées et
+          manuelles), selon le modèle "un provider = un agenda synchronisé". Laisse ce champ vide
+          et enregistre pour revenir à l&apos;API/identifiants.
+        </p>
+        <p className="meta-line">
           Les evenements passes sont conserves meme s'ils disparaissent du flux ICS.
           Les evenements futurs qui changent ou sont supprimes du flux seront mis a jour.
         </p>
@@ -313,21 +349,30 @@ export function ProviderPage() {
               value={icsUrl}
               onChange={(e) => setIcsUrl(e.target.value)}
               placeholder="https://..."
-              disabled={icsSyncing}
+              disabled={icsSaving || icsTesting}
             />
           </label>
         </div>
         {icsResult ? <p className="meta-line" style={{ color: 'var(--ok)' }}>{icsResult}</p> : null}
-        {hasStoredIcsUrl && !icsUrl ? (
-          <p className="meta-line">Une URL ICS est déjà enregistrée. Colle une nouvelle URL seulement si tu veux la remplacer.</p>
-        ) : null}
+        {hasStoredIcsUrl ? (
+          <p className="meta-line">Une URL ICS est actuellement enregistrée et active pour ce provider.</p>
+        ) : (
+          <p className="meta-line">Aucune URL ICS enregistrée — l&apos;API/identifiants ci-dessus sont utilisés.</p>
+        )}
         <div className="actions-row">
           <button
-            className="button"
-            disabled={icsSyncing || !icsUrl}
-            onClick={() => void handleIcsSync()}
+            className="button button-secondary"
+            disabled={icsSaving || icsTesting || !icsUrl.trim()}
+            onClick={() => void handleIcsTest()}
           >
-            {icsSyncing ? 'Synchronisation...' : 'Synchroniser depuis ICS'}
+            {icsTesting ? 'Test...' : 'Tester'}
+          </button>
+          <button
+            className="button"
+            disabled={icsSaving || icsTesting}
+            onClick={() => void handleIcsSave()}
+          >
+            {icsSaving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
         </div>
       </Panel>

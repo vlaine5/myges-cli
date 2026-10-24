@@ -88,6 +88,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  previewIcs: (icsUrl: string) =>
+    request<{ ok: boolean; eventCount: number }>('/ics/preview', {
+      method: 'POST',
+      body: JSON.stringify({ icsUrl }),
+    }),
   patchProviderConfig: (
     provider: 'myges' | 'myefrei' | 'ensup',
     patch: { agendaEndpoint?: string | null; icsUrl?: string | null },
@@ -216,17 +221,4 @@ export const api = {
     request(`/enrichment-rules/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteEnrichmentRule: (id: string) =>
     request(`/enrichment-rules/${id}`, { method: 'DELETE' }),
-  // Agendas
-  listAgendas: () => request('/agendas'),
-  getAgenda: (id: string) => request(`/agendas/${id}`),
-  createAgenda: (payload: unknown) =>
-    request('/agendas', { method: 'POST', body: JSON.stringify(payload) }),
-  updateAgenda: (id: string, payload: unknown) =>
-    request(`/agendas/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  deleteAgenda: (id: string) =>
-    request(`/agendas/${id}`, { method: 'DELETE' }),
-  syncAgenda: (id: string, dryRun = false) =>
-    request(`/agendas/${id}/sync`, { method: 'POST', body: JSON.stringify({ dryRun }) }),
-  testAgenda: (id: string) =>
-    request(`/agendas/${id}/test`, { method: 'POST' }),
 };

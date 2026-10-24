@@ -10,6 +10,7 @@ import { EnsupProvider } from './modules/providers/ensup.provider';
 import { MyEfreiProvider } from './modules/providers/myefrei.provider';
 import { MyGesProvider } from './modules/providers/myges.provider';
 import { ProviderRegistryService } from './modules/providers/provider-registry.service';
+import { ProviderCredentialStore } from './modules/providers/provider-credential.store';
 import { ReconciliationService } from './modules/reconciliation/reconciliation.service';
 import { SchedulerService } from './modules/scheduler/scheduler.service';
 import { SettingsService } from './modules/settings/settings.service';
@@ -23,7 +24,15 @@ export function createServices(prisma: PrismaClient) {
     new MyEfreiProvider(prisma),
     new EnsupProvider(prisma),
   ]);
-  const eventsService = new EventsService(prisma, providerRegistryService, settingsService);
+  const providerCredentialStore = new ProviderCredentialStore(prisma);
+  const enrichmentRuleService = new EnrichmentRuleService(prisma);
+  const eventsService = new EventsService(
+    prisma,
+    providerRegistryService,
+    settingsService,
+    providerCredentialStore,
+    enrichmentRuleService,
+  );
   const googleAuthService = new GoogleAuthService(prisma);
   const googleCalendarService = new GoogleCalendarService(googleAuthService);
   const reconciliationService = new ReconciliationService(prisma, googleCalendarService);
@@ -47,7 +56,6 @@ export function createServices(prisma: PrismaClient) {
   );
   const schedulerService = new SchedulerService(prisma, syncService, agendaService);
   const icsImportService = new IcsImportService(prisma, reconciliationService);
-  const enrichmentRuleService = new EnrichmentRuleService(prisma);
 
   return {
     prisma,
@@ -64,6 +72,7 @@ export function createServices(prisma: PrismaClient) {
     agendaService,
     icsImportService,
     enrichmentRuleService,
+    providerCredentialStore,
   };
 }
 

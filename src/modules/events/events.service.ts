@@ -1,16 +1,22 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { snapshotToEventDto, dedupeEvents } from './normalize';
-import type { AcademicProviderId, RangeQuery } from './types';
+import type { AcademicProviderId, NormalizedEvent, RangeQuery } from './types';
 import { AppError } from '../../lib/app-error';
 import type { ProviderRegistryService } from '../providers/provider-registry.service';
 import type { SettingsService } from '../settings/settings.service';
 import { collapseEquivalentEvents } from './presentation';
+import type { ProviderCredentialStore } from '../providers/provider-credential.store';
+import { fetchNormalizedIcsEvents } from './ics-normalize';
+import type { EnrichmentRuleService } from '../enrichment/enrichment-rule.service';
+import { applyEnrichmentToEvent } from '../enrichment/enrichment-rule.service';
 
 export class EventsService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly providerRegistryService: ProviderRegistryService,
     private readonly settingsService: SettingsService,
+    private readonly providerCredentialStore: ProviderCredentialStore,
+    private readonly enrichmentRuleService: EnrichmentRuleService,
   ) {}
 
   private async resolveProvider(providerId?: AcademicProviderId) {
@@ -19,15 +25,42 @@ export class EventsService {
       : this.providerRegistryService.getActiveProvider();
   }
 
+  /**
+   * Returns a non-empty ICS URL configured for this provider, if any — in
+   * which case it takes precedence over the live API/credential fetch path
+   * for every sync trigger (manual, dry-run, scheduled, startup), per the
+   * "one provider = one synced agenda" model.
+   */
+  private async resolveIcsUrl(providerId: AcademicProviderId): Promise<string | null> {
+    const record = await this.providerCredentialStore.get(providerId);
+    if (!record) return null;
+
+    const config = this.providerCredentialStore.getConfig(record);
+    const icsUrl = config.icsUrl;
+    return typeof icsUrl === 'string' && icsUrl.trim().length > 0 ? icsUrl.trim() : null;
+  }
+
   async refreshRange(
     range: RangeQuery,
     options: { includeRawPayload?: boolean; providerId?: AcademicProviderId; agendaId?: string } = {},
   ) {
     const provider = await this.resolveProvider(options.providerId);
-    const fetchedEvents = await provider.fetchEvents(range, {
-      includeRawPayload: options.includeRawPayload,
-    });
-    const deduped = collapseEquivalentEvents(dedupeEvents(fetchedEvents));
+    const icsUrl = await this.resolveIcsUrl(provider.id);
+
+    const fetchedEvents: NormalizedEvent[] = icsUrl
+      ? await fetchNormalizedIcsEvents(icsUrl, provider.id, {
+          includeRawPayload: options.includeRawPayload,
+        })
+      : await provider.fetchEvents(range, {
+          includeRawPayload: options.includeRawPayload,
+        });
+
+    const enabledRules = (await this.enrichmentRuleService.list()).filter((rule) => rule.enabled);
+    const enrichedEvents = enabledRules.length > 0
+      ? fetchedEvents.map((event) => applyEnrichmentToEvent(event, enabledRules))
+      : fetchedEvents;
+
+    const deduped = collapseEquivalentEvents(dedupeEvents(enrichedEvents));
     const now = new Date();
 
     // Snapshot ids that don't exist yet are brand-new occurrences: reconciliation

@@ -1,6 +1,8 @@
 import type { EventEnrichmentRule, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { AppError } from '../../lib/app-error';
+import { buildNormalizedEvent } from '../events/normalize';
+import type { AcademicProviderId, NormalizedEvent } from '../events/types';
 
 export const enrichmentRuleInputSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -242,4 +244,46 @@ export function applyEnrichmentRules(
   }
 
   return result;
+}
+
+/**
+ * Apply a (pre-filtered-to-enabled) list of enrichment rules to a fully
+ * normalized event, used by EventsService.refreshRange() right before
+ * dedupe/upsert, for both the live-API and ICS fetch paths.
+ *
+ * Returns the same event unchanged (same object reference) when no rule
+ * matched, and a freshly rebuilt NormalizedEvent (recomputed id/sourceHash)
+ * otherwise, since injected fields may change the event's content.
+ */
+export function applyEnrichmentToEvent(
+  event: NormalizedEvent,
+  rules: EnrichmentRuleDto[],
+): NormalizedEvent {
+  const fields: EnrichableFields = {
+    provider: event.provider,
+    classes: event.classes,
+    subject: event.subject,
+    room: event.room,
+    title: event.title,
+    description: [event.subject, event.disciplineName].filter(Boolean).join(' '),
+  };
+
+  const applied = applyEnrichmentRules(rules, fields);
+  if (applied.matchedRules.length === 0) {
+    return event;
+  }
+
+  return buildNormalizedEvent({
+    ...event,
+    provider: (applied.provider as AcademicProviderId | undefined) ?? event.provider,
+    subject: applied.subject ?? event.subject,
+    teacher: applied.teacher ?? event.teacher,
+    room: applied.room ?? event.room,
+    campus: applied.campus ?? event.campus,
+    classes: applied.injectClass ? [applied.injectClass] : event.classes,
+    promotion: applied.injectClass ?? event.promotion,
+    group: applied.injectClass ?? event.group,
+    studentCount: applied.studentCount ?? event.studentCount,
+    modality: applied.modality ?? event.modality,
+  });
 }

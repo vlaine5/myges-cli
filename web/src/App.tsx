@@ -4,19 +4,18 @@ import { HomePage } from './pages/HomePage';
 import { ProviderPage } from './pages/ProviderPage';
 import { GooglePage } from './pages/GooglePage';
 import { AgendaPage } from './pages/AgendaPage';
-import { AgendasPage } from './pages/AgendasPage';
 import { SyncPage } from './pages/SyncPage';
 import { SyncJobDetailPage } from './pages/SyncJobDetailPage';
 import { MatchesPage } from './pages/MatchesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { TeachingStatsPage } from './pages/TeachingStatsPage';
+import { ClassOverridesPage } from './pages/ClassOverridesPage';
 
 export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<HomePage />} />
-        <Route path="/agendas" element={<AgendasPage />} />
         <Route path="/provider" element={<ProviderPage />} />
         <Route path="/providers" element={<ProviderPage />} />
         <Route path="/google" element={<GooglePage />} />
@@ -27,6 +26,7 @@ export function App() {
         <Route path="/sync/:jobId" element={<SyncJobDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/teaching" element={<TeachingStatsPage />} />
+        <Route path="/effectifs" element={<ClassOverridesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
