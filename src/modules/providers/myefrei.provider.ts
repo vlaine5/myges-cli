@@ -156,6 +156,22 @@ function sanitizeConfig(config: Record<string, unknown>) {
   };
 }
 
+/**
+ * Merge new config input onto the existing stored (raw, unsanitized) config.
+ * Used anywhere credentials are persisted so an icsUrl configured via
+ * PATCH /config is never silently dropped — sanitizeConfig() must only be
+ * used for the outward status display, never for what gets persisted.
+ */
+function mergeConfig(existingRaw: Record<string, unknown>, incoming: Record<string, unknown> | undefined) {
+  const existing = parseMyEfreiConfig(existingRaw);
+  const input = incoming ?? {};
+
+  return {
+    agendaEndpoint: typeof input.agendaEndpoint === 'string' ? input.agendaEndpoint : existing.agendaEndpoint,
+    icsUrl: typeof input.icsUrl === 'string' ? input.icsUrl : existing.icsUrl,
+  };
+}
+
 function normalizeSessionCookieHeader(rawCookieHeader: string) {
   const cookies = new Map<string, string>();
   const parts = rawCookieHeader
@@ -530,7 +546,7 @@ export class MyEfreiProvider implements AcademicProvider {
           username: credential.username,
           password,
           sessionCookie,
-          config: sanitizeConfig(this.store.getConfig(credential)),
+          config: this.store.getConfig(credential),
           lastLoginAt: new Date(),
           lastLoginError: null,
         });
@@ -737,20 +753,25 @@ export class MyEfreiProvider implements AcademicProvider {
 
   private async buildStatus(): Promise<AcademicProviderStatus> {
     const credential = await this.store.get(this.id);
+    const hasIcsUrl = Boolean(credential && parseMyEfreiConfig(this.store.getConfig(credential)).icsUrl);
 
     return {
       provider: this.id,
       displayName: this.displayName,
-      configured: Boolean(
-        credential?.sessionCookieEncrypted ||
-          (credential?.username && credential?.passwordEncrypted),
-      ),
+      configured:
+        hasIcsUrl ||
+        Boolean(
+          credential?.sessionCookieEncrypted ||
+            (credential?.username && credential?.passwordEncrypted),
+        ),
       authMode: credential?.authMode ?? null,
-      hasSavedCredentials: Boolean(
-        credential?.username ||
-          credential?.passwordEncrypted ||
-          credential?.sessionCookieEncrypted,
-      ),
+      hasSavedCredentials:
+        hasIcsUrl ||
+        Boolean(
+          credential?.username ||
+            credential?.passwordEncrypted ||
+            credential?.sessionCookieEncrypted,
+        ),
       hasToken: false,
       hasSessionCookie: Boolean(credential?.sessionCookieEncrypted),
       tokenExpiresAt: null,
@@ -765,7 +786,8 @@ export class MyEfreiProvider implements AcademicProvider {
   }
 
   async authenticate(input: AcademicProviderCredentialInput) {
-    const config = sanitizeConfig(input.config ?? {});
+    const existing = await this.store.get(this.id);
+    const config = mergeConfig(existing ? this.store.getConfig(existing) : {}, input.config);
 
     if (input.sessionCookie) {
       const normalizedSessionCookie = normalizeSessionCookieHeader(input.sessionCookie);

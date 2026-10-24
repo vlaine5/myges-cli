@@ -248,3 +248,100 @@ describe('EventsService.refreshRange — ICS vs API branch', () => {
     expect(stored?.studentCount).toBeNull();
   });
 });
+
+describe('EventsService.refreshRange — stale snapshot cleanup (duplicate prevention)', () => {
+  // These must sit in the future relative to the real wall clock: the cleanup
+  // logic never touches past events (permanent historical records), so a fixed
+  // 2026 fixture date would be inert once that date is in the past.
+  const now = new Date();
+  const futureStart = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const futureEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const range = { start: now, end: futureEnd };
+
+  it('removes the old API-sourced snapshot once the provider switches to ICS mode, preventing a duplicate GlobalEvent for the same lecture', async () => {
+    const apiEvent = makeEvent({
+      id: 'myges:api-1',
+      sourceId: 'api-1',
+      startAt: futureStart,
+      endAt: new Date(futureStart.getTime() + 2 * 60 * 60 * 1000),
+    });
+    const { provider } = makeFakeProvider([apiEvent]);
+    const service = buildService(provider);
+
+    // First sync: live API mode, no icsUrl configured yet.
+    await service.refreshRange(range);
+    expect(await prisma.eventSnapshot.findMany({ where: { provider: 'myges' } })).toHaveLength(1);
+
+    // Switch to ICS mode: the ICS feed represents the same real lecture but
+    // with a different sourceId (sha256 of the ICS UID), so it lands as a
+    // brand-new snapshot id. Without cleanup, both would coexist forever.
+    await prisma.academicProviderCredential.create({
+      data: { provider: 'myges', configJson: JSON.stringify({ icsUrl: 'https://example.com/agenda.ics' }) },
+    });
+    vi.mocked(fetchAndParseIcs).mockResolvedValue([
+      {
+        uid: 'uid-1',
+        summary: 'Cours ICS',
+        description: null,
+        location: 'B204',
+        categories: [],
+        startAt: futureStart,
+        endAt: new Date(futureStart.getTime() + 2 * 60 * 60 * 1000),
+        status: null,
+        raw: {},
+      } as any,
+    ]);
+
+    await service.refreshRange(range);
+
+    const stored = await prisma.eventSnapshot.findMany({ where: { provider: 'myges' } });
+    expect(stored).toHaveLength(1);
+    expect(stored[0].id).not.toBe('myges:api-1');
+    expect(stored[0].title).toBe('Cours ICS');
+  });
+
+  it('removes a future snapshot that disappeared from a repeated ICS fetch, but never touches a past snapshot', async () => {
+    const { provider } = makeFakeProvider([]);
+    const service = buildService(provider);
+
+    await prisma.academicProviderCredential.create({
+      data: { provider: 'myges', configJson: JSON.stringify({ icsUrl: 'https://example.com/agenda.ics' }) },
+    });
+
+    const pastEvent = {
+      uid: 'uid-past',
+      summary: 'Cours passe',
+      description: null,
+      location: null,
+      categories: [],
+      startAt: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000),
+      endAt: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000),
+      status: null,
+      raw: {},
+    } as any;
+    const futureEvent = {
+      uid: 'uid-future',
+      summary: 'Cours futur',
+      description: null,
+      location: null,
+      categories: [],
+      startAt: futureStart,
+      endAt: new Date(futureStart.getTime() + 60 * 60 * 1000),
+      status: null,
+      raw: {},
+    } as any;
+
+    vi.mocked(fetchAndParseIcs).mockResolvedValue([pastEvent, futureEvent]);
+    await service.refreshRange({ start: new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000), end: futureEnd });
+    expect(await prisma.eventSnapshot.findMany({ where: { provider: 'myges' } })).toHaveLength(2);
+
+    // Second fetch: the future lecture disappeared from the feed (e.g. cancelled
+    // and removed entirely), the past one is naturally absent from a real feed too.
+    vi.mocked(fetchAndParseIcs).mockResolvedValue([]);
+    await service.refreshRange({ start: new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000), end: futureEnd });
+
+    const remaining = await prisma.eventSnapshot.findMany({ where: { provider: 'myges' } });
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].title).toBe('Cours passe');
+  });
+});

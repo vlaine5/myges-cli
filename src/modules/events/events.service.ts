@@ -77,6 +77,32 @@ export class EventsService {
     );
     const newSnapshotIds = deduped.filter((event) => !existingIds.has(event.id)).map((event) => event.id);
 
+    // Events that disappeared from the current fetch (cancelled, removed from the
+    // source, or left behind after switching this provider between ICS and API
+    // mode) must be removed, or their now-stale GlobalEvent stays "represented"
+    // forever and the next fetch's version of the same real-world event creates
+    // a second, separate GlobalEvent — duplicating it on Google. Past events are
+    // never touched; they are permanent historical records. An ICS feed is the
+    // full future horizon regardless of `range`, so its cleanup isn't range-bound;
+    // a live API fetch only covers `range`, so cleanup is scoped to it.
+    const seenIds = new Set(deduped.map((event) => event.id));
+    const cleanupLowerBound = range.start.getTime() > now.getTime() ? range.start : now;
+    const staleSnapshots = await this.prisma.eventSnapshot.findMany({
+      where: {
+        provider: provider.id,
+        agendaId: options.agendaId ?? null,
+        startAt: icsUrl
+          ? { gt: now }
+          : { gte: cleanupLowerBound, lte: range.end },
+      },
+      select: { id: true },
+    });
+    const staleIds = staleSnapshots.filter((row) => !seenIds.has(row.id)).map((row) => row.id);
+
+    if (staleIds.length > 0) {
+      await this.prisma.eventSnapshot.deleteMany({ where: { id: { in: staleIds } } });
+    }
+
     await this.prisma.$transaction(
       deduped.map((event) =>
         this.prisma.eventSnapshot.upsert({

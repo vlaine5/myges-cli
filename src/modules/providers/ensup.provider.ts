@@ -41,6 +41,24 @@ function sanitizeConfig(config: Record<string, unknown>): EnsupConfig {
   };
 }
 
+/**
+ * Merge new config input onto the existing stored (raw, unsanitized) config.
+ * Used anywhere credentials are persisted so an icsUrl configured via
+ * PATCH /config is never silently dropped — sanitizeConfig() must only be
+ * used for the outward status display, never for what gets persisted.
+ */
+function mergeConfig(existingRaw: Record<string, unknown>, incoming: Record<string, unknown> | undefined): EnsupConfig {
+  const existing = parseEnsupConfig(existingRaw);
+  const input = incoming ?? {};
+
+  return {
+    ...existing,
+    agendaEndpoint: typeof input.agendaEndpoint === 'string' ? input.agendaEndpoint : existing.agendaEndpoint,
+    icsUrl: typeof input.icsUrl === 'string' ? input.icsUrl : existing.icsUrl,
+    nbStudents: typeof input.nbStudents === 'number' ? input.nbStudents : existing.nbStudents ?? null,
+  };
+}
+
 function getString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
@@ -486,20 +504,25 @@ export class EnsupProvider implements AcademicProvider {
 
   private async buildStatus(): Promise<AcademicProviderStatus> {
     const credential = await this.store.get(this.id);
+    const hasIcsUrl = Boolean(credential && parseEnsupConfig(this.store.getConfig(credential)).icsUrl);
 
     return {
       provider: this.id,
       displayName: this.displayName,
-      configured: Boolean(
-        credential?.sessionCookieEncrypted ||
-          (credential?.username && credential?.passwordEncrypted),
-      ),
+      configured:
+        hasIcsUrl ||
+        Boolean(
+          credential?.sessionCookieEncrypted ||
+            (credential?.username && credential?.passwordEncrypted),
+        ),
       authMode: credential?.authMode ?? null,
-      hasSavedCredentials: Boolean(
-        credential?.username ||
-          credential?.passwordEncrypted ||
-          credential?.sessionCookieEncrypted,
-      ),
+      hasSavedCredentials:
+        hasIcsUrl ||
+        Boolean(
+          credential?.username ||
+            credential?.passwordEncrypted ||
+            credential?.sessionCookieEncrypted,
+        ),
       hasToken: false,
       hasSessionCookie: Boolean(credential?.sessionCookieEncrypted),
       tokenExpiresAt: null,
@@ -515,7 +538,8 @@ export class EnsupProvider implements AcademicProvider {
   }
 
   async authenticate(input: AcademicProviderCredentialInput): Promise<AcademicProviderStatus> {
-    const config = sanitizeConfig(input.config ?? {});
+    const existing = await this.store.get(this.id);
+    const config = mergeConfig(existing ? this.store.getConfig(existing) : {}, input.config);
 
     if (input.sessionCookie) {
       const normalizedCookie = normalizeSessionCookieHeader(input.sessionCookie);

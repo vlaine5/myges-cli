@@ -102,19 +102,20 @@ export function ProviderPage() {
     };
   }
 
-  async function handleIcsSave() {
+  async function saveIcsUrl(nextIcsUrl: string | null) {
     setIcsSaving(true);
     setIcsResult(null);
     setError(null);
     setSuccess(null);
     try {
       const result = await api.patchProviderConfig(provider, {
-        icsUrl: icsUrl.trim() ? icsUrl.trim() : null,
+        icsUrl: nextIcsUrl,
       }) as { ok: boolean; status: any };
       setStatus(result.status);
       setHasStoredIcsUrl(readHasIcsUrl(result.status?.config));
+      setIcsUrl('');
       setSuccess(
-        icsUrl.trim()
+        nextIcsUrl
           ? `URL ICS enregistree pour ${provider}. Elle sera utilisee pour toutes les synchronisations.`
           : `URL ICS retiree pour ${provider}. L API/identifiants seront utilises a nouveau.`,
       );
@@ -123,6 +124,15 @@ export function ProviderPage() {
     } finally {
       setIcsSaving(false);
     }
+  }
+
+  async function handleIcsSave() {
+    if (!icsUrl.trim()) return;
+    await saveIcsUrl(icsUrl.trim());
+  }
+
+  async function handleIcsRemove() {
+    await saveIcsUrl(null);
   }
 
   async function handleIcsTest() {
@@ -221,10 +231,14 @@ export function ProviderPage() {
 
       <Panel title="Etat actuel">
         <StatusBadge tone={status?.configured ? 'ok' : 'warn'}>
-          {status?.configured ? 'Configure' : 'Non configure'}
+          {status?.configured ? 'Connecte' : 'Non configure'}
         </StatusBadge>
         <p className="meta-line">Provider: {status?.displayName ?? provider}</p>
-        <p className="meta-line">Mode auth: {status?.authMode ?? 'N/A'}</p>
+        <p className="meta-line">
+          Source de synchronisation active:{' '}
+          <strong>{hasStoredIcsUrl ? 'lien ICS' : 'API / identifiants'}</strong>
+        </p>
+        {!hasStoredIcsUrl ? <p className="meta-line">Mode auth: {status?.authMode ?? 'N/A'}</p> : null}
         <p className="meta-line">
           Identifiants sauvegardes: {status?.hasSavedCredentials ? 'Oui' : 'Non'}
         </p>
@@ -248,7 +262,7 @@ export function ProviderPage() {
         <p className="meta-line">
           Si une URL ICS est enregistrée pour ce provider (panneau ci-dessous), elle est utilisée
           à la place de la connexion API/identifiants pour toutes les synchronisations (planifiées
-          et manuelles). Laisse le champ ICS vide pour utiliser l&apos;API/identifiants ci-dessous.
+          et manuelles). Sans lien ICS, ce sont l&apos;API/identifiants ci-dessous qui sont utilisés.
         </p>
 
         <div className="form-grid">
@@ -335,8 +349,8 @@ export function ProviderPage() {
         <p className="meta-line">
           Si une URL ICS est enregistrée ici, elle remplace la connexion API/identifiants
           ci-dessus comme source pour toutes les synchronisations de ce provider (planifiées et
-          manuelles), selon le modèle "un provider = un agenda synchronisé". Laisse ce champ vide
-          et enregistre pour revenir à l&apos;API/identifiants.
+          manuelles), selon le modèle "un provider = un agenda synchronisé". Clique sur
+          &quot;Supprimer le lien ICS&quot; pour revenir à l&apos;API/identifiants.
         </p>
         <p className="meta-line">
           Les evenements passes sont conserves meme s'ils disparaissent du flux ICS.
@@ -355,7 +369,10 @@ export function ProviderPage() {
         </div>
         {icsResult ? <p className="meta-line" style={{ color: 'var(--ok)' }}>{icsResult}</p> : null}
         {hasStoredIcsUrl ? (
-          <p className="meta-line">Une URL ICS est actuellement enregistrée et active pour ce provider.</p>
+          <p className="meta-line">
+            <StatusBadge tone="ok">Connecte via ICS</StatusBadge> Une URL ICS est actuellement
+            enregistrée et utilisée pour la synchronisation de ce provider.
+          </p>
         ) : (
           <p className="meta-line">Aucune URL ICS enregistrée — l&apos;API/identifiants ci-dessus sont utilisés.</p>
         )}
@@ -369,11 +386,20 @@ export function ProviderPage() {
           </button>
           <button
             className="button"
-            disabled={icsSaving || icsTesting}
+            disabled={icsSaving || icsTesting || !icsUrl.trim()}
             onClick={() => void handleIcsSave()}
           >
             {icsSaving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
+          {hasStoredIcsUrl ? (
+            <button
+              className="button button-secondary"
+              disabled={icsSaving || icsTesting}
+              onClick={() => void handleIcsRemove()}
+            >
+              {icsSaving ? 'Suppression...' : 'Supprimer le lien ICS'}
+            </button>
+          ) : null}
         </div>
       </Panel>
     </div>

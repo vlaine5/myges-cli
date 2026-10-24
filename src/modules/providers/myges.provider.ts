@@ -156,13 +156,15 @@ export class MyGesProvider implements AcademicProvider {
 
   private async buildStatus(): Promise<AcademicProviderStatus> {
     const credential = await this.store.get(this.id);
+    const config = credential ? this.store.getConfig(credential) : {};
+    const hasIcsUrl = typeof config.icsUrl === 'string' && config.icsUrl.trim().length > 0;
 
     return {
       provider: this.id,
       displayName: this.displayName,
-      configured: Boolean(credential?.username && credential?.passwordEncrypted),
+      configured: hasIcsUrl || Boolean(credential?.username && credential?.passwordEncrypted),
       authMode: credential?.authMode ?? null,
-      hasSavedCredentials: Boolean(credential?.username || credential?.passwordEncrypted),
+      hasSavedCredentials: hasIcsUrl || Boolean(credential?.username || credential?.passwordEncrypted),
       hasToken: Boolean(credential?.accessToken && credential?.tokenType),
       hasSessionCookie: Boolean(credential?.sessionCookieEncrypted),
       tokenExpiresAt: credential?.accessTokenExpiresAt?.toISOString() ?? null,
@@ -179,6 +181,11 @@ export class MyGesProvider implements AcademicProvider {
     }
 
     const token = await this.fetchAccessToken(input.username, input.password);
+    const existing = await this.store.get(this.id);
+    // Merge with the existing stored config (notably icsUrl, managed separately
+    // via PATCH /config) rather than replacing it wholesale — saving credentials
+    // here must never silently wipe out an ICS URL configured elsewhere.
+    const mergedConfig = { ...(existing ? this.store.getConfig(existing) : {}), ...(input.config ?? {}) };
     await this.store.upsert(this.id, {
       authMode: 'password',
       username: input.username,
@@ -186,7 +193,7 @@ export class MyGesProvider implements AcademicProvider {
       accessToken: token.access_token,
       tokenType: token.token_type,
       accessTokenExpiresAt: new Date(Date.now() + Number.parseInt(token.expires_in, 10) * 1000),
-      config: input.config ?? {},
+      config: mergedConfig,
       lastLoginAt: new Date(),
       lastLoginError: null,
     });
