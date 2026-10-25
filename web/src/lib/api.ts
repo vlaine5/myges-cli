@@ -212,6 +212,14 @@ export const api = {
     if (params?.subject) search.set('subject', params.subject);
     return request(`/stats/teaching?${search.toString()}`);
   },
+  // Grades / bulletins (MyGES academic records)
+  getGradeYears: () => request<{ years: string[] }>('/grades/years'),
+  getBulletin: (year?: string) =>
+    request(`/grades${year ? `?year=${encodeURIComponent(year)}` : ''}`),
+  // Courses (MyGES academic records; for a teacher account these are the courses they teach)
+  getCourseYears: () => request<{ years: string[] }>('/courses/years'),
+  getCourses: (year?: string) =>
+    request(`/courses${year ? `?year=${encodeURIComponent(year)}` : ''}`),
   // Enrichment Rules
   listEnrichmentRules: () => request('/enrichment-rules'),
   getEnrichmentRule: (id: string) => request(`/enrichment-rules/${id}`),

@@ -20,6 +20,8 @@ import { createImportsRouter } from './routes/imports.routes';
 import { createEnrichmentRulesRouter } from './routes/enrichment-rules.routes';
 import { createReconciliationRouter } from './routes/reconciliation.routes';
 import { createGlobalEventsRouter } from './routes/global-events.routes';
+import { createGradesRouter } from './routes/grades.routes';
+import { createCoursesRouter } from './routes/courses.routes';
 
 export function createApp(services: Services) {
   const app = express();
@@ -54,6 +56,8 @@ export function createApp(services: Services) {
   app.use('/api/enrichment-rules', createEnrichmentRulesRouter(services));
   app.use('/api/reconciliation', createReconciliationRouter(services));
   app.use('/api/global-events', createGlobalEventsRouter(services));
+  app.use('/api/grades', createGradesRouter(services));
+  app.use('/api/courses', createCoursesRouter(services));
 
   app.use('/api/*', (_request, _response, next) => {
     next(new AppError('API route not found.', 404, 'NOT_FOUND'));

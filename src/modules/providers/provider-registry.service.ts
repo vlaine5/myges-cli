@@ -15,6 +15,10 @@ export class ProviderRegistryService {
     }
   }
 
+  getProviders(): AcademicProvider[] {
+    return [...this.providers.values()];
+  }
+
   getProvider(providerId: AcademicProviderId) {
     const provider = this.providers.get(providerId);
 

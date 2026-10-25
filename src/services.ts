@@ -2,6 +2,8 @@ import type { PrismaClient } from '@prisma/client';
 import { AgendaService } from './modules/agendas/agenda.service';
 import { EnrichmentRuleService } from './modules/enrichment/enrichment-rule.service';
 import { EventsService } from './modules/events/events.service';
+import { CoursesService } from './modules/courses/courses.service';
+import { GradesService } from './modules/grades/grades.service';
 import { IcsImportService } from './modules/imports/ics-import.service';
 import { IcsExportService } from './modules/export/ics-export.service';
 import { GoogleAuthService } from './modules/google/google-auth.service';
@@ -56,6 +58,8 @@ export function createServices(prisma: PrismaClient) {
   );
   const schedulerService = new SchedulerService(prisma, syncService, agendaService);
   const icsImportService = new IcsImportService(prisma, reconciliationService);
+  const gradesService = new GradesService(providerRegistryService);
+  const coursesService = new CoursesService(providerRegistryService);
 
   return {
     prisma,
@@ -73,6 +77,8 @@ export function createServices(prisma: PrismaClient) {
     icsImportService,
     enrichmentRuleService,
     providerCredentialStore,
+    gradesService,
+    coursesService,
   };
 }
 

@@ -1,374 +1,233 @@
 # Academic Sync
 
-Application personnelle de synchronisation d’agenda académique.
+Application personnelle de synchronisation d'agenda académique et de lecture du dossier
+scolaire, multi-provider, avec UI web, persistance locale et export vers Google Calendar / ICS.
 
-Le dépôt a été remis en état autour d’une seule stack:
+Stack unique :
 
 - backend Express en TypeScript
-- frontend React/Vite
+- frontend React / Vite
 - persistance SQLite + Prisma
 - scheduler interne
 - export ICS
 - synchronisation Google Calendar
-- architecture multi-provider
+- architecture multi-provider (MyGES, myEfrei, Ensup/HyperPlanning)
 
 ## État réel du projet
 
-Ce qui fonctionne aujourd’hui:
+Ce qui fonctionne aujourd'hui :
 
-- `myges` en live: auth, test connexion, récupération agenda, `studentCount`, sync dry-run, export ICS
-- `myefrei` via modèle multi-provider, UI, API, cache, stats et export ICS depuis le cache
-- `ensup` / HyperPlanning via architecture provider, UI, ICS, stats, filtres et export ICS
-- Google OAuth côté backend avec calendrier sélectionnable par provider
-- dashboard, agenda, sync, Google, settings, heures d’enseignement
-- Docker monolithique simple
+- **`myges` en live** : auth OAuth, test connexion, agenda, `studentCount`, sync dry-run, export ICS,
+  et **dossier académique en lecture** — onglet **Mes cours** (`/me/{année}/courses`) et, pour les
+  comptes étudiants, onglet **Notes** (`/me/{année}/grades`)
+- `myefrei` via modèle multi-provider : UI, API, cache, stats, export ICS depuis le cache
+- `ensup` / HyperPlanning via architecture provider : UI, ICS, stats, filtres, export ICS
+- Google OAuth côté backend, calendrier sélectionnable par provider
+- dashboard, agenda, sync, Google, settings, heures d'enseignement, **Mes cours**
 
-Limites réelles:
+Limites réelles :
 
-- `myefrei` bloque le login automatisé username/password avec reCAPTCHA
-- pour `myefrei`, la voie fiable reste `session cookie` + `agendaEndpoint`, ou un flux ICS si disponible
-- le code Google est testé côté statut/OAuth start; je n’ai pas forcé de déconnexion ni modifié de mapping Google live pendant la validation
+- `myefrei` bloque le login automatisé username/password avec reCAPTCHA ; voie fiable = `session cookie`
+  + `agendaEndpoint`, ou un flux ICS
+- le dossier académique MyGES dépend du **rôle du compte** (voir ci-dessous)
+- le code Google est validé côté statut / OAuth start uniquement
+
+## MyGES — rôles et dossier académique
+
+MyGES / Réseau GES expose **deux back-ends distincts** :
+
+| | `api.kordis.fr` (API mobile, utilisée ici) | `myges.fr/teacher/*` (site web) |
+|---|---|---|
+| Auth | token OAuth Bearer | cookie de session (CAS) |
+| Techno | REST JSON (`{ result }`) | JSF / PrimeFaces (ViewState) |
+| Saisie de notes | non exposée | formulaire JSF |
+
+Cette app parle à `api.kordis.fr`. Les droits dépendent du **rôle** :
+
+| Endpoint | Enseignant | Étudiant |
+|---|---|---|
+| `GET /me/profile`, `GET /me/years` | ✅ | ✅ |
+| `GET /me/{année}/courses` (**Mes cours**) | ✅ cours enseignés | ✅ cours suivis |
+| `GET /me/{année}/grades` (**Notes**) | ❌ 418 | ✅ |
+| `absences`, `projects`, `nextProjectSteps` | ❌ 418 | ✅ |
+
+- **Mes cours** (`/courses`) : matière, classe/groupe, enseignant, effectif, coef, ECTS, et des
+  indicateurs « Notes / Docs ». Lecture seule, marche pour tous les rôles.
+- **Notes** (`/grades`) : bulletin par trimestre, moyennes pondérées, ECTS. Comptes étudiants
+  uniquement ; l'onglet n'est pas dans la barre de navigation car il renvoie `418` pour un enseignant.
+
+La saisie de notes côté enseignant n'existe que dans le site web JSF, pas dans l'API REST : aucun
+import automatisé de notes n'est fourni. Cartographie complète de l'API dans
+[`docs/myges-api-audit.md`](docs/myges-api-audit.md).
+
+## Sécurité & confidentialité
+
+- **Aucun secret dans le dépôt.** `.env*` (hors `.env.example`), `data/`, `*.db` et `logs/` sont
+  dans `.gitignore`. Les identifiants et tokens ne sont jamais commités.
+- **Chiffrement au repos.** Mots de passe providers, cookies de session et tokens Google sont
+  chiffrés en base en **AES-256-GCM**, clé dérivée de `APP_SECRET` (`src/lib/crypto.ts`). `APP_SECRET`
+  doit faire ≥ 16 caractères ; changez-le en production et ne réutilisez pas les valeurs d'exemple.
+- **Logs sans fuite.** Les en-têtes de requête ne sont jamais journalisés (ils porteraient les cookies
+  d'autres apps sur la même IP), et seuls des champs d'erreur sûrs sont loggés pour ne pas exposer de
+  bearer token (`src/app.ts`, `src/lib/logger.ts`).
+- **Lecture seule MyGES.** L'app ne fait que des `GET` sur le compte MyGES ; rien n'est modifié côté
+  établissement.
+- L'image Docker ne contient ni `.env` ni `data/` (voir `.dockerignore`).
 
 ## Architecture
 
-Le cœur métier repose sur un modèle d’événement normalisé commun.
+Cœur métier : un modèle d'événement normalisé commun.
 
-Principaux modules:
+Modules principaux :
 
-- `src/modules/providers`: providers académiques
-- `src/modules/events`: normalisation, déduplication, filtres de présentation
-- `src/modules/sync`: sync Google et sync ICS
-- `src/modules/google`: OAuth et opérations Calendar
-- `src/modules/export`: export ICS
-- `src/modules/settings`: settings applicatifs
-- `src/routes`: API HTTP
-- `web/`: frontend React
-- `prisma/`: schéma SQLite et migrations
+- `src/modules/providers` : providers académiques (auth + lecture)
+- `src/modules/courses` : agrégation « Mes cours » (lecture seule)
+- `src/modules/grades` : agrégation bulletin / notes (comptes étudiants)
+- `src/modules/events` : normalisation, déduplication, filtres de présentation
+- `src/modules/sync` : sync Google et sync ICS
+- `src/modules/google` : OAuth et opérations Calendar
+- `src/modules/export` : export ICS
+- `src/modules/reconciliation` : réconciliation inter-provider
+- `src/modules/settings` : settings applicatifs
+- `src/routes` : API HTTP
+- `web/` : frontend React
+- `prisma/` : schéma SQLite et migrations
 
 ## Providers
 
-Providers actuellement câblés:
+Providers câblés : `myges`, `myefrei`, `ensup`.
 
-- `myges`
-- `myefrei`
-- `ensup`
+Le provider actif est stocké dans `AppSettings.provider`. Par ailleurs, les capacités de dossier
+académique (`listYears` / `fetchCourses` / `fetchGrades`) sont optionnelles : seul MyGES les implémente,
+et les services « Mes cours » / « Notes » basculent automatiquement vers le provider MyGES même si le
+provider actif (pour le calendrier) est myEfrei ou Ensup.
 
-Le provider actif est stocké dans `AppSettings.provider`, mais:
+Le reste du modèle est tagué par provider :
 
-- les snapshots d’événements sont taggés par provider
-- les jobs de sync sont taggés par provider
-- les calendriers Google sélectionnés sont taggés par provider
-- l’export ICS peut être demandé par provider
+- les snapshots d'événements sont tagués par provider
+- les jobs de sync sont tagués par provider
+- les calendriers Google sélectionnés sont tagués par provider
+- l'export ICS peut être demandé par provider
 
 ## Modèle normalisé
 
-Champs principaux:
+Champs principaux : `id = ${provider}:${sourceId}`, `provider`, `sourceId`, `reservationId`, `title`,
+`subject`, `startAt`, `endAt`, `teacher`, `room`, `campus`, `promotion`, `group`, `classes`, `modality`,
+`studentCount`, `disciplineName`, `disciplineTeacher`, `disciplineId`, `rawPayload`, `sourceHash`.
 
-- `id = ${provider}:${sourceId}`
-- `provider`
-- `sourceId`
-- `reservationId`
-- `title`
-- `subject`
-- `startAt`
-- `endAt`
-- `teacher`
-- `room`
-- `campus`
-- `promotion`
-- `group`
-- `classes`
-- `modality`
-- `studentCount`
-- `disciplineName`
-- `disciplineTeacher`
-- `disciplineId`
-- `rawPayload`
-- `sourceHash`
+La sync Google, l'API, l'export ICS et les stats ne dépendent pas directement de MyGES.
 
-La sync Google, l’API, l’export ICS et les stats ne dépendent pas directement de MyGES.
+### `studentCount`
 
-## `studentCount`
+- `myges` : `agenda[].discipline.nb_students`
+- `myefrei` : premier champ numérique valide parmi `studentCount`, `nb_students`, `classSize`,
+  `discipline.nb_students`
+- `ensup` : `studentCount`, `nb_students`, `nbStudents`, `effectif`, `nbEleves` si présents, sinon `null`
 
-Source par provider:
+Règle : si l'information n'existe pas, la valeur reste `null` — aucune valeur n'est inventée.
 
-- `myges`: `agenda[].discipline.nb_students`
-- `myefrei`: premier champ numérique valide parmi `studentCount`, `nb_students`, `classSize`, `discipline.nb_students`, puis valeurs structurées éventuelles dans les détails si présentes
-- `ensup`: `studentCount`, `nb_students`, `nbStudents`, `effectif`, `nbEleves` si présents, sinon `null`
+## Déduplication & réconciliation
 
-Règle:
+Deux niveaux de déduplication :
 
-- si l’information n’existe pas, la valeur renvoyée reste `null`
-- aucune valeur n’est inventée
+1. stricte, par identifiant normalisé `id`
+2. collapse des doublons visibles équivalents (même provider), la version la plus riche est gardée
 
-## Groupes myEfrei
-
-Les groupes sont récupérés de deux façons:
-
-- depuis les champs natifs quand ils existent (`group`, `class`, `studentGroup`, `discipline.student_group_name`, `classes`)
-- depuis les descriptions structurées du type `Groupe(s): B3-CS-FISA2`
-
-Le parsing structuré supporte aussi:
-
-- `Code module`
-- `Enseignant(s)`
-- `Modalité`
-- `Activité`
-- `Nombre d’élèves` si la donnée existe
-
-Les groupes remontent dans:
-
-- l’API `/api/events`
-- la page Agenda
-- la page Heures d’enseignement
-- les descriptions Google
-- l’export ICS
-
-## Exclusion ENSUP / HyperPlanning
-
-Les événements ENSUP non souhaités sont exclus à l’affichage, des stats, de l’export ICS et de la sync issue du modèle normalisé.
-
-Logique actuelle:
-
-- provider `ensup`
-- mots-clés de type `Férié`, `Jour férié`, `Vacances`
-- absence de métadonnées pédagogiques réelles (pas d’enseignant, pas de classes, pas de groupe, pas de promotion)
-
-Cette logique est centralisée dans `src/modules/events/presentation.ts`.
-
-## Déduplication
-
-Deux niveaux de déduplication sont appliqués:
-
-1. déduplication stricte par identifiant normalisé `id`
-2. collapse des doublons équivalents visibles, pour éviter les doubles séances importées avec une version pauvre puis une version enrichie
-
-Le collapse “équivalent” compare notamment:
-
-- provider
-- début / fin
-- titre / matière
-- salle
-- enseignant
-- groupes / classes
-
-La version la plus riche est gardée.
-
-Conséquences:
-
-- les vues API/UI/stats n’affichent plus les doublons évidents
-- l’export ICS depuis le cache n’exporte plus les doublons visibles
-- la sync ICS supprime aussi les doublons futurs équivalents qui disparaissent du flux
-
-## Réconciliation inter-provider (`GlobalEvent`)
-
-Au-delà du collapse ci-dessus (même provider), un modèle à trois niveaux relie les événements source à un événement canonique:
+Au-delà (inter-provider), un modèle à trois niveaux relie les sources à un événement canonique :
 
 ```
 EventSnapshot (par provider)  →  GlobalEvent (canonique)  →  EventMapping (Google)
 ```
 
-Règles:
+- liaison automatique uniquement sur preuve forte (identifiant partagé vérifié, ou répétition d'une
+  correspondance déjà confirmée) — sinon simple suggestion à valider sur `/matches`
+- toute décision (auto-lien, confirmation, rejet, déliaison) est tracée dans `EventMatch`
+- Google ne reçoit qu'un événement par `GlobalEvent`
 
-- chaque `EventSnapshot` appartient toujours à un `GlobalEvent` (solo par défaut)
-- liaison automatique uniquement sur preuve forte: identifiant vérifié partagé entre providers, ou répétition d'une correspondance déjà confirmée par un humain (`src/modules/reconciliation/reconciliation.service.ts`)
-- une simple ressemblance (horaire + titre + salle/enseignant) ne produit qu'une suggestion (`SUGGESTED`/`AMBIGUOUS`), jamais une fusion automatique — à valider sur `/matches`
-- toute décision (auto-lien, confirmation, rejet, déliaison) est tracée dans `EventMatch`, jamais écrasée
-- Google ne reçoit qu'un événement par `GlobalEvent`; fusionner deux événements déjà synchronisés supprime le doublon Google plutôt que d'en garder deux
+Chaque sync journalise ses changements (`SyncJobEventChange`), consultables et annulables depuis
+`/sync/:jobId`.
 
-Chaque exécution de sync journalise aussi ses changements (`SyncJobEventChange`), consultables et annulables (changement par changement ou en bloc) depuis `/sync/:jobId`.
+## Heures d'enseignement
 
-## Heures d’enseignement
-
-La page `/teaching` agrège les heures par classe / groupe sur une période donnée.
-
-Elle supporte:
-
-- filtre période
-- filtre provider
-- filtre matière
-- total heures
-- nombre de séances
-- étudiant(s) par classe quand la donnée existe
-
-L’historique est conservé en base locale:
-
-- les événements passés ne sont pas supprimés quand ils disparaissent ensuite de certains flux
-- les futures disparitions dans un flux ICS entraînent seulement la suppression des événements futurs correspondants
+La page `/teaching` agrège les heures par classe / groupe sur une période : filtres période / provider
+/ matière, total heures, nombre de séances, effectif par classe quand la donnée existe. L'historique
+local est conservé (les événements passés ne sont pas supprimés quand ils disparaissent d'un flux).
 
 ## Google Calendar
 
-Fonctions disponibles dans l’UI `/google`:
+UI `/google` : statut OAuth, connecter / reconnecter / déconnecter, lister les calendriers, en
+sélectionner ou en créer un **par provider**.
 
-- voir le statut OAuth
-- connecter / reconnecter
-- déconnecter
-- voir les calendriers disponibles
-- sélectionner un calendrier par provider
-- créer un calendrier et le sélectionner pour un provider
+Configuration : `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URL`.
 
-Configuration:
+## myEfrei & Ensup
 
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REDIRECT_URL`
-
-Le mapping est provider-aware:
-
-- `myges` peut cibler un agenda Google
-- `myefrei` peut en cibler un autre
-- `ensup` peut en cibler un autre
-
-## myEfrei
-
-Modes supportés:
-
-- `username/password`
-- `session cookie`
-- `session cookie + agendaEndpoint`
-- ICS si un flux est disponible
-
-État réel:
-
-- le login automatisé username/password est bloqué ici par reCAPTCHA
-- le cookie collé depuis le navigateur est désormais utilisé brut, sans décodage destructif
-- le test de session vérifie la présence minimale de `myefrei.sid=...`
-- l’URL `agendaEndpoint` doit être la vraie requête JSON/XHR de l’agenda
-
-Pour trouver `agendaEndpoint`:
-
-1. se connecter à myEfrei dans le navigateur
-2. ouvrir DevTools > Network
-3. filtrer `Fetch/XHR`
-4. recharger la page agenda
-5. copier la `Request URL` de la requête qui renvoie le JSON des cours
-
-## ENSUP / HyperPlanning
-
-Le provider `ensup` cible `https://extranet-hp-sqy.ensup.eu`.
-
-Modes supportés:
-
-- ICS
-- session cookie + agenda endpoint
-- tentative username/password côté HyperPlanning quand le portail l’accepte
-
-Variables supportées:
-
-- `ENSUP_USERNAME`
-- `ENSUP_PASSWORD`
-- `ENSUP_SESSION_COOKIE`
-- `ENSUP_AGENDA_ENDPOINT`
-- `ENSUP_ICS_URL`
+- **myEfrei** : `username/password` (bloqué par reCAPTCHA), `session cookie`, `session cookie +
+  agendaEndpoint`, ou ICS. Pour `agendaEndpoint` : DevTools › Network › Fetch/XHR › recharger l'agenda
+  › copier la `Request URL` du JSON des cours.
+- **Ensup / HyperPlanning** (`https://extranet-hp-sqy.ensup.eu`) : ICS, `session cookie + agendaEndpoint`,
+  ou username/password quand le portail l'accepte. Variables : `ENSUP_USERNAME`, `ENSUP_PASSWORD`,
+  `ENSUP_SESSION_COOKIE`, `ENSUP_AGENDA_ENDPOINT`, `ENSUP_ICS_URL`.
 
 ## API
 
-Routes principales:
+Santé / système : `GET /api/health`, `GET /api/diagnostics`, `GET /api/dashboard`,
+`GET /api/settings`, `PUT /api/settings`.
 
-- `GET /api/health`
-- `GET /api/diagnostics`
-- `GET /api/dashboard`
-- `GET /api/settings`
-- `PUT /api/settings`
-- `GET /api/providers/status`
-- `GET /api/providers/:provider/status`
-- `POST /api/providers/:provider/login`
-- `POST /api/providers/:provider/connect`
-- `POST /api/providers/:provider/test`
-- `PATCH /api/providers/:provider/config`
-- `GET /api/events?provider=&start=&end=&refresh=`
-- `GET /api/events/:id`
-- `GET /api/global-events?start=&end=`
-- `GET /api/global-events/:id`
-- `GET /api/reconciliation/suggestions?provider=`
-- `POST /api/reconciliation/suggestions/:matchId/confirm`
-- `POST /api/reconciliation/suggestions/:matchId/reject`
-- `POST /api/reconciliation/links/:globalEventId/unlink`
-- `POST /api/sync/run`
-- `POST /api/sync/dry-run`
-- `GET /api/sync/history?provider=`
-- `GET /api/sync/jobs/:jobId/changes`
-- `POST /api/sync/jobs/:jobId/changes/:changeId/rollback`
-- `POST /api/sync/jobs/:jobId/rollback`
-- `GET /api/export/ics?provider=&start=&end=&save=&refresh=`
-- `GET /api/export/ics/latest`
-- `POST /api/ics/sync`
-- `GET /api/stats/teaching?provider=&start=&end=&subject=`
-- `GET /api/google/status`
-- `GET /api/google/config`
-- `PUT /api/google/config`
-- `POST /api/google/oauth/start`
-- `GET /api/google/oauth/callback`
-- `POST /api/google/disconnect`
-- `GET /api/google/calendars`
-- `POST /api/google/calendars`
-- `PUT /api/google/calendar`
+Providers : `GET /api/providers/status`, `GET /api/providers/:provider/status`,
+`POST /api/providers/:provider/login`, `POST /api/providers/:provider/connect`,
+`POST /api/providers/:provider/test`, `PATCH /api/providers/:provider/config`.
+
+Dossier académique MyGES (lecture seule) :
+
+- `GET /api/courses/years` — années disponibles
+- `GET /api/courses?year=YYYY` — cours (Mes cours), défaut = année la plus récente
+- `GET /api/grades/years` — années disponibles (comptes étudiants)
+- `GET /api/grades?year=YYYY` — bulletin (comptes étudiants)
+
+Événements / réconciliation / sync : `GET /api/events`, `GET /api/events/:id`,
+`GET /api/global-events`, `GET /api/global-events/:id`, `GET /api/reconciliation/suggestions`,
+`POST /api/reconciliation/suggestions/:matchId/confirm|reject`,
+`POST /api/reconciliation/links/:globalEventId/unlink`, `POST /api/sync/run`, `POST /api/sync/dry-run`,
+`GET /api/sync/history`, `GET /api/sync/jobs/:jobId/changes`,
+`POST /api/sync/jobs/:jobId/changes/:changeId/rollback`, `POST /api/sync/jobs/:jobId/rollback`.
+
+Export / ICS / stats : `GET /api/export/ics`, `GET /api/export/ics/latest`, `POST /api/ics/sync`,
+`GET /api/stats/teaching`.
+
+Google : `GET /api/google/status`, `GET /api/google/config`, `PUT /api/google/config`,
+`POST /api/google/oauth/start`, `GET /api/google/oauth/callback`, `POST /api/google/disconnect`,
+`GET /api/google/calendars`, `POST /api/google/calendars`, `PUT /api/google/calendar`.
 
 ## Frontend
 
-Pages utiles:
+Pages : `/` (accueil), `/agenda` (ou `/events`), **`/courses` (Mes cours)**, `/matches`, `/provider`,
+`/google`, `/sync`, `/sync/:jobId`, `/teaching`, `/effectifs`, `/settings`. La page `/grades` (Notes,
+comptes étudiants) existe mais n'est pas dans la barre de navigation.
 
-- `/` accueil (calendrier global + panneau d'activité + bandeau d'alerte)
-- `/agendas`
-- `/imports`
-- `/provider` ou `/providers`
-- `/google`
-- `/agenda` ou `/events`
-- `/matches` suggestions de rapprochement multi-provider
-- `/sync`
-- `/sync/:jobId` détail d'une synchronisation (journal de changements, rollback)
-- `/teaching`
-- `/settings`
-
-Ce qui est branché:
-
-- appels API réels
-- états loading/error
-- sélection du provider actif
-- test connexion providers
-- choix du provider dans la sync manuelle
-- filtre matière dans les heures d’enseignement
-- export ICS par provider
+Branché : appels API réels, états loading/error, sélection du provider actif, test connexion,
+choix du provider dans la sync manuelle, filtres, export ICS par provider.
 
 ## Lancement local
 
-Prérequis:
-
-- Node.js 20 recommandé
-- npm
-
-Installation:
+Prérequis : Node.js 20 recommandé, npm.
 
 ```bash
-cp .env.example .env
+cp .env.example .env     # puis renseigner au minimum APP_SECRET (≥ 16 caractères)
 npm install
 npm run build
 npm start
 ```
 
-UI production:
+- UI/API : `http://localhost:3000` (API sous `/api`)
 
-- `http://localhost:3000`
-
-API:
-
-- `http://localhost:3000/api`
-
-## Développement
+Développement (backend watch + Vite) :
 
 ```bash
 npm run dev
 ```
 
-Cela lance:
-
-- backend watch
-- frontend Vite
-
-URLs:
-
-- UI Vite: `http://localhost:5173`
-- proxy API Vite: `/api`
+- UI Vite : `http://localhost:5173`, proxy API : `/api`
 
 ## Docker
 
@@ -377,55 +236,39 @@ cp .env.example .env
 docker-compose up --build -d
 ```
 
-Accès:
+- UI/API : `http://localhost:3000` (port externe configurable via `MYGES_PORT`)
+- persistance : `./data:/app/data`
 
-- UI/API: `http://localhost:3000`
+Image publiée : `vlaine/myges-cli:latest`.
 
-Persistance:
+## Variables d'environnement
 
-- `./data:/app/data`
+Deux catégories à ne pas confondre :
 
-## Variables d’environnement
+1. **Infra, toujours lues** — nécessaires au fonctionnement, relues à chaque démarrage.
+2. **Identifiants (providers + Google OAuth), optionnelles** — ne servent qu'à pré-remplir la base au
+   **tout premier** démarrage, si elle est vide. Une fois des identifiants enregistrés (via l'env ou
+   via `/provider` / `/google`), **c'est l'interface qui fait foi** : ces variables ne sont plus relues.
 
-Deux categories tres differentes, a ne pas confondre:
+Infra (requis) : `NODE_ENV`, `HOST`, `PORT`, `APP_BASE_URL`, `APP_SECRET`, `DATABASE_URL`,
+`APP_DATA_DIR`, `LOG_LEVEL`, `GOOGLE_OAUTH_SCOPES` (relue à chaque OAuth, jamais stockée).
 
-1. **Infra, toujours lues** — necessaires au fonctionnement de l'app elle-meme, relues a chaque demarrage.
-2. **Identifiants (providers + Google OAuth), optionnelles** — ne servent qu'a pre-remplir la base au tout premier demarrage, si elle est encore vide. Une fois des identifiants enregistres (via l'env ou directement via l'interface `/provider` / `/google`), **c'est l'interface qui fait foi**: ces variables ne sont plus jamais relues. Inutile de les renseigner dans `.env` si tu comptes tout configurer depuis l'UI.
+Paramètres de sync (seed unique dans `AppSettings`, modifiables via `/settings`) : `ACADEMIC_PROVIDER`,
+`SYNC_ENABLED`, `SYNC_LOOKBACK_DAYS`, `SYNC_FUTURE_DAYS`, `SYNC_FREQUENCY_MINUTES`,
+`SYNC_RUN_ON_STARTUP`, `GOOGLE_SYNC_ENABLED`, `SAVE_LAST_ICS`, `STORE_RAW_PAYLOAD`, `TIMEZONE`.
 
-Infra (toujours requis):
+Identifiants providers (optionnel, bootstrap unique — configurables ensuite via `/provider`) :
 
-- `NODE_ENV`
-- `HOST`
-- `PORT`
-- `APP_BASE_URL`
-- `APP_SECRET`
-- `DATABASE_URL`
-- `APP_DATA_DIR`
-- `LOG_LEVEL`
-- `GOOGLE_OAUTH_SCOPES` (exception: celle-ci est relue a chaque connexion OAuth, jamais stockee en base)
+- MyGES : `MYGES_USERNAME`, `MYGES_PASSWORD`
+- myEfrei : `MYEFREI_USERNAME`, `MYEFREI_PASSWORD`, `MYEFREI_SESSION_COOKIE`, `MYEFREI_AGENDA_ENDPOINT`
+- Ensup : `ENSUP_USERNAME`, `ENSUP_PASSWORD`, `ENSUP_SESSION_COOKIE`, `ENSUP_AGENDA_ENDPOINT`, `ENSUP_ICS_URL`
 
-Parametres de sync par defaut (seed unique dans `AppSettings`, modifiables ensuite via `/settings`):
+Google OAuth (optionnel, bootstrap unique — configurable via `/google`) : `GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URL`, `GOOGLE_DEFAULT_CALENDAR_ID`.
 
-- `ACADEMIC_PROVIDER`
-- `SYNC_ENABLED`, `SYNC_LOOKBACK_DAYS`, `SYNC_FUTURE_DAYS`, `SYNC_FREQUENCY_MINUTES`, `SYNC_RUN_ON_STARTUP`
-- `GOOGLE_SYNC_ENABLED`, `SAVE_LAST_ICS`, `STORE_RAW_PAYLOAD`, `TIMEZONE`
+> Ne commitez jamais un `.env` rempli : il est ignoré par git à dessein.
 
-Identifiants providers (optionnel, bootstrap unique — configurable ensuite via `/provider`):
-
-- MyGES: `MYGES_USERNAME`, `MYGES_PASSWORD`
-- myEfrei: `MYEFREI_USERNAME`, `MYEFREI_PASSWORD`, `MYEFREI_SESSION_COOKIE`, `MYEFREI_AGENDA_ENDPOINT`
-- Ensup: `ENSUP_USERNAME`, `ENSUP_PASSWORD`, `ENSUP_SESSION_COOKIE`, `ENSUP_AGENDA_ENDPOINT`, `ENSUP_ICS_URL`
-
-Google OAuth (optionnel, bootstrap unique — configurable ensuite via `/google`, qui a priorite a chaque connexion):
-
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REDIRECT_URL`
-- `GOOGLE_DEFAULT_CALENDAR_ID`
-
-## Tests
-
-Commandes:
+## Tests & qualité
 
 ```bash
 npm run lint
@@ -433,39 +276,24 @@ npm test
 npm run build
 ```
 
-Tests utiles présents:
+Couverture utile : mapping MyGES / myEfrei, agrégation « Mes cours » et bulletin, parsing des
+descriptions structurées, exclusion ENSUP, déduplication, provider registry, plan de sync idempotent.
 
-- mapping MyGES
-- mapping myEfrei
-- parsing descriptions structurées
-- exclusion ENSUP
-- déduplication visible
-- provider registry
-- plan de sync idempotent
+## Scripts
+
+- `npm run sync:once` — une passe de sync
+- `npm run export:ics` — export ICS
+- `node scripts/myges-api-probe.mjs` — sonde l'API MyGES en **lecture seule** (GET) et écrit un dump
+  **rédacté** dans `data/exports/` ; nécessite un `MYGES_PASSWORD` valide dans `.env`
 
 ## Troubleshooting
 
-`MYEFREI_SESSION_EXPIRED`
-
-- le cookie est syntaxiquement accepté mais refusé par le portail
-- reconnecte-toi dans le navigateur et recopie le header `Cookie`
-
-`MYEFREI_ENDPOINT_NOT_CONFIGURED`
-
-- le provider myEfrei n’a pas d’`agendaEndpoint`
-- configure l’URL XHR JSON de l’agenda, ou utilise le flux ICS si tu travailles depuis le cache
-
-`GOOGLE_NOT_CONFIGURED`
-
-- configure Google OAuth dans `.env` ou dans l’interface `/google`
-
-`EADDRINUSE`
-
-- un autre service écoute déjà sur le port demandé
-- en local, lance par exemple `PORT=3001 APP_BASE_URL=http://localhost:3001 npm start`
-
-Base SQLite dupliquée (`prisma/data/app.db`)
-
-- la base réelle de l'application vit à `./data/app.db` (voir `DATABASE_URL` dans `.env`), résolue par rapport à la racine du dépôt
-- ne lance jamais `npx prisma studio` / `npx prisma migrate dev` sans `DATABASE_URL` explicitement défini en absolu: Prisma résout un chemin relatif dans `schema.prisma` par rapport au dossier `prisma/`, pas à la racine, ce qui recrée une base fantôme sous `prisma/data/`
-- si ce fichier réapparaît, il peut être supprimé sans risque (il n'est jamais lu par l'application)
+- `MYGES_NOT_CONFIGURED` : connecte-toi via `/provider` → MyGES (ou renseigne `MYGES_*` sur une base vierge).
+- `GRADES_NOT_SUPPORTED` / réponse `418` sur les notes : compte au rôle enseignant → utilise **Mes cours**.
+- `MYEFREI_SESSION_EXPIRED` : cookie refusé par le portail, recopie le header `Cookie` depuis le navigateur.
+- `MYEFREI_ENDPOINT_NOT_CONFIGURED` : configure l'URL XHR JSON de l'agenda, ou passe par ICS.
+- `GOOGLE_NOT_CONFIGURED` : configure Google OAuth dans `.env` ou `/google`.
+- `EADDRINUSE` : port occupé, ex. `PORT=3001 APP_BASE_URL=http://localhost:3001 npm start`.
+- Base SQLite fantôme sous `prisma/data/app.db` : la base réelle vit à `./data/app.db`
+  (`DATABASE_URL`). Ne lance pas `prisma studio` / `migrate dev` sans `DATABASE_URL` absolu ; un
+  fichier réapparu sous `prisma/data/` peut être supprimé sans risque.

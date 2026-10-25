@@ -9,6 +9,8 @@ import type {
   AcademicProviderCredentialInput,
   AcademicProviderStatus,
   AcademicProviderTestResult,
+  ProviderCoursePayload,
+  ProviderGradePayload,
 } from './types';
 
 interface MyGesAccessToken {
@@ -234,5 +236,35 @@ export class MyGesProvider implements AcademicProvider {
     );
 
     return events.map((event) => normalizeAgendaEvent(event, this.id, options));
+  }
+
+  /** Academic years the student is enrolled in (e.g. ['2024', '2025']). */
+  async listYears(): Promise<string[]> {
+    const years = await this.requestWithCredentials<Array<string | number>>(
+      '/me/years',
+      await this.ensureAccessToken(),
+    );
+
+    return (years ?? []).map((year) => String(year));
+  }
+
+  /** Raw grades for a given academic year (`GET /me/{year}/grades`). Student role only. */
+  async fetchGrades(year: string): Promise<ProviderGradePayload[]> {
+    const grades = await this.requestWithCredentials<ProviderGradePayload[]>(
+      `/me/${encodeURIComponent(year)}/grades`,
+      await this.ensureAccessToken(),
+    );
+
+    return grades ?? [];
+  }
+
+  /** Courses for a given academic year (`GET /me/{year}/courses`). Taught courses for a teacher. */
+  async fetchCourses(year: string): Promise<ProviderCoursePayload[]> {
+    const courses = await this.requestWithCredentials<ProviderCoursePayload[]>(
+      `/me/${encodeURIComponent(year)}/courses`,
+      await this.ensureAccessToken(),
+    );
+
+    return courses ?? [];
   }
 }

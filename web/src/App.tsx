@@ -9,6 +9,8 @@ import { SyncJobDetailPage } from './pages/SyncJobDetailPage';
 import { MatchesPage } from './pages/MatchesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { TeachingStatsPage } from './pages/TeachingStatsPage';
+import { GradesPage } from './pages/GradesPage';
+import { CoursesPage } from './pages/CoursesPage';
 import { ClassOverridesPage } from './pages/ClassOverridesPage';
 
 export function App() {
@@ -26,6 +28,10 @@ export function App() {
         <Route path="/sync/:jobId" element={<SyncJobDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/teaching" element={<TeachingStatsPage />} />
+        <Route path="/courses" element={<CoursesPage />} />
+        <Route path="/mes-cours" element={<CoursesPage />} />
+        <Route path="/grades" element={<GradesPage />} />
+        <Route path="/notes" element={<GradesPage />} />
         <Route path="/effectifs" element={<ClassOverridesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
