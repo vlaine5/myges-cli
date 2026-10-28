@@ -49,6 +49,25 @@ model AgendaConfig {
   @@index([syncEnabled])
 }
 
+// Weekly sync schedule of one provider: fetch it on the given weekdays at the
+// given local times (AppSettings.timezone), then push its changes to Google.
+model ProviderSchedule {
+  provider      String    @id
+  enabled       Boolean   @default(false)
+  // JSON array of weekdays, 0=Sun .. 6=Sat
+  daysJson      String    @default("[]")
+  // JSON array of "HH:MM" local times
+  timesJson     String    @default("[]")
+  pushToGoogle  Boolean   @default(true)
+  // The scheduled slot most recently handled, so each slot runs only once
+  lastSlotAt    DateTime?
+  lastRunAt     DateTime?
+  lastRunStatus String?
+  lastRunError  String?
+  lastJobId     String?
+  updatedAt     DateTime  @updatedAt
+}
+
 model AcademicProviderCredential {
   provider             String   @id
   authMode             String?

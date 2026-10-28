@@ -14,6 +14,7 @@ import { MyGesProvider } from './modules/providers/myges.provider';
 import { ProviderRegistryService } from './modules/providers/provider-registry.service';
 import { ProviderCredentialStore } from './modules/providers/provider-credential.store';
 import { ReconciliationService } from './modules/reconciliation/reconciliation.service';
+import { ProviderScheduleService } from './modules/scheduler/provider-schedule.service';
 import { SchedulerService } from './modules/scheduler/scheduler.service';
 import { SettingsService } from './modules/settings/settings.service';
 import { IcsSyncService } from './modules/sync/ics-sync.service';
@@ -56,7 +57,8 @@ export function createServices(prisma: PrismaClient) {
     providerRegistryService,
     syncService,
   );
-  const schedulerService = new SchedulerService(prisma, syncService, agendaService);
+  const providerScheduleService = new ProviderScheduleService(prisma);
+  const schedulerService = new SchedulerService(prisma, syncService, providerScheduleService, agendaService);
   const icsImportService = new IcsImportService(prisma, reconciliationService);
   const gradesService = new GradesService(providerRegistryService);
   const coursesService = new CoursesService(providerRegistryService);
@@ -71,6 +73,7 @@ export function createServices(prisma: PrismaClient) {
     reconciliationService,
     icsExportService,
     syncService,
+    providerScheduleService,
     schedulerService,
     icsSyncService,
     agendaService,

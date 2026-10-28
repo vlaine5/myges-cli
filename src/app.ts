@@ -22,6 +22,7 @@ import { createReconciliationRouter } from './routes/reconciliation.routes';
 import { createGlobalEventsRouter } from './routes/global-events.routes';
 import { createGradesRouter } from './routes/grades.routes';
 import { createCoursesRouter } from './routes/courses.routes';
+import { createSchedulesRouter } from './routes/schedules.routes';
 
 export function createApp(services: Services) {
   const app = express();
@@ -58,6 +59,7 @@ export function createApp(services: Services) {
   app.use('/api/global-events', createGlobalEventsRouter(services));
   app.use('/api/grades', createGradesRouter(services));
   app.use('/api/courses', createCoursesRouter(services));
+  app.use('/api/schedules', createSchedulesRouter(services));
 
   app.use('/api/*', (_request, _response, next) => {
     next(new AppError('API route not found.', 404, 'NOT_FOUND'));

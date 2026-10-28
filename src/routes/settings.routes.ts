@@ -18,7 +18,6 @@ export function createSettingsRouter(services: Services) {
     asyncHandler(async (request, response) => {
       const payload = settingsInputSchema.parse(request.body);
       const settings = await services.settingsService.updateSettings(payload);
-      await services.schedulerService.reschedule();
       response.json(settings);
     }),
   );

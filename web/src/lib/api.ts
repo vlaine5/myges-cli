@@ -2,6 +2,8 @@ import type {
   EventMatch,
   GlobalEvent,
   GlobalEventDetail,
+  ProviderSchedule,
+  SchedulableProvider,
   RollbackJobResult,
   SyncJobEventChange,
 } from './types';
@@ -120,6 +122,16 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+  listSchedules: () => request<ProviderSchedule[]>('/schedules'),
+  saveSchedule: (
+    provider: SchedulableProvider,
+    payload: Pick<ProviderSchedule, 'enabled' | 'days' | 'times' | 'pushToGoogle'>,
+  ) =>
+    request<ProviderSchedule>(`/schedules/${provider}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  runSchedule: (provider: SchedulableProvider) => request(`/schedules/${provider}/run`, { method: 'POST' }),
   getSettings: () => request('/settings'),
   saveSettings: (payload: unknown) =>
     request('/settings', {

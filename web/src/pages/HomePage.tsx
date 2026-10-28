@@ -234,9 +234,11 @@ export function HomePage() {
           <span className="status-tile-value">{dashboard?.google?.connected ? 'Connecté' : 'Non connecté'}</span>
         </div>
         <div className="status-tile">
-          <span className="status-tile-label">Scheduler</span>
+          <span className="status-tile-label">Prochaine sync</span>
           <span className="status-tile-value">
-            {dashboard?.settings?.syncEnabled ? 'Actif' : 'Désactivé'}
+            {dashboard?.scheduler?.nextRunAt
+              ? `${PROVIDER_LABELS[dashboard.scheduler.nextRunProvider] ?? dashboard.scheduler.nextRunProvider} — ${formatDateTime(dashboard.scheduler.nextRunAt)}`
+              : 'Aucune planifiée'}
           </span>
         </div>
         <div className="status-tile">

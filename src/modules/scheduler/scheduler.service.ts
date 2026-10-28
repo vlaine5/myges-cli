@@ -1,16 +1,29 @@
 import type { PrismaClient } from '@prisma/client';
+import { AppError } from '../../lib/app-error';
 import { logger } from '../../lib/logger';
 import type { AgendaService } from '../agendas/agenda.service';
+import type { AcademicProviderId } from '../events/types';
 import type { SyncService } from '../sync/sync.service';
+import { toWeeklySchedule, type ProviderScheduleService } from './provider-schedule.service';
+import { getDueSlot } from './schedule-slots';
 
+const TICK_MS = 60_000;
+
+/**
+ * Runs each provider on its own weekly schedule (ProviderSchedule): every
+ * minute, a provider whose latest slot has not been handled yet is fetched and
+ * its changes pushed to Google. Syncs run one at a time; a slot that hits a
+ * sync already in progress is retried on the next tick.
+ */
 export class SchedulerService {
-  private timer: NodeJS.Timeout | null = null;
+  private tickTimer: NodeJS.Timeout | null = null;
   private hourlyTimer: NodeJS.Timeout | null = null;
-  private nextRunAt: Date | null = null;
+  private ticking = false;
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly syncService: SyncService,
+    private readonly providerScheduleService: ProviderScheduleService,
     private readonly agendaService?: AgendaService,
   ) {}
 
@@ -19,8 +32,8 @@ export class SchedulerService {
       where: { id: 1 },
     });
 
-    if (settings.syncEnabled && settings.runSyncOnStartup) {
-      this.trigger('STARTUP').catch((error) => {
+    if (settings.runSyncOnStartup) {
+      this.runStartupSyncs().catch((error) => {
         logger.error({ err: error }, 'Startup sync failed.');
       });
     }
@@ -32,31 +45,69 @@ export class SchedulerService {
       });
     }
 
-    await this.reschedule();
+    void this.tick();
+    this.tickTimer = setInterval(() => void this.tick(), TICK_MS);
     this.scheduleHourlyAgendaCheck();
   }
 
-  async reschedule() {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
+  /** Startup run of every scheduled provider; does not consume any slot. */
+  private async runStartupSyncs() {
+    for (const schedule of await this.providerScheduleService.listEnabled()) {
+      try {
+        await this.syncService.run({
+          trigger: 'STARTUP',
+          providerId: schedule.provider as AcademicProviderId,
+          pushToGoogle: schedule.pushToGoogle,
+        });
+      } catch (error) {
+        logger.error({ err: error, provider: schedule.provider }, 'Startup sync of a provider failed.');
+      }
     }
+  }
 
-    const settings = await this.prisma.appSettings.findUniqueOrThrow({
-      where: { id: 1 },
-    });
+  async tick(now = new Date()) {
+    if (this.ticking) return;
+    this.ticking = true;
 
-    if (!settings.syncEnabled) {
-      this.nextRunAt = null;
-      return;
+    try {
+      const settings = await this.prisma.appSettings.findUniqueOrThrow({ where: { id: 1 } });
+
+      for (const schedule of await this.providerScheduleService.listEnabled()) {
+        const slot = getDueSlot(toWeeklySchedule(schedule), settings.timezone, schedule.lastSlotAt, now);
+        if (!slot) continue;
+        await this.runSlot(schedule.provider as AcademicProviderId, slot, schedule.pushToGoogle);
+      }
+    } catch (error) {
+      logger.error({ err: error }, 'Scheduler tick failed.');
+    } finally {
+      this.ticking = false;
     }
+  }
 
-    this.nextRunAt = new Date(Date.now() + settings.syncFrequencyMinutes * 60_000);
-    this.timer = setTimeout(() => {
-      this.trigger('SCHEDULED').catch((error) => {
-        logger.error({ err: error }, 'Scheduled sync failed.');
+  private async runSlot(provider: AcademicProviderId, slot: Date, pushToGoogle: boolean) {
+    const startedAt = new Date();
+    logger.info({ provider, slot: slot.toISOString(), pushToGoogle }, 'Running scheduled provider sync.');
+
+    try {
+      const result = await this.syncService.run({ trigger: 'SCHEDULED', providerId: provider, pushToGoogle });
+      await this.providerScheduleService.recordRun(provider, slot, { status: 'SUCCESS', jobId: result.job.id });
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'SYNC_ALREADY_RUNNING') {
+        logger.info({ provider }, 'Another sync is running; scheduled sync retried next minute.');
+        return;
+      }
+
+      const job = await this.prisma.syncJob.findFirst({
+        where: { provider, trigger: 'SCHEDULED', startedAt: { gte: startedAt } },
+        orderBy: { startedAt: 'desc' },
       });
-    }, settings.syncFrequencyMinutes * 60_000);
+      await this.providerScheduleService.recordRun(provider, slot, {
+        status: 'FAILED',
+        error: error instanceof Error ? error.message : 'Unknown sync error.',
+        jobId: job?.id,
+      });
+      logger.error({ err: error, provider }, 'Scheduled provider sync failed.');
+    }
   }
 
   /**
@@ -91,25 +142,19 @@ export class SchedulerService {
     });
   }
 
-  async trigger(trigger: 'SCHEDULED' | 'STARTUP') {
-    try {
-      await this.syncService.run({ trigger });
-    } finally {
-      await this.reschedule();
-    }
-  }
-
-  getStatus() {
+  async getStatus() {
+    const nextRun = await this.providerScheduleService.getNextRun();
     return {
       running: this.syncService.isRunning(),
-      nextRunAt: this.nextRunAt?.toISOString() ?? null,
+      nextRunAt: nextRun?.at ?? null,
+      nextRunProvider: nextRun?.provider ?? null,
     };
   }
 
   stop() {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
+    if (this.tickTimer) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
     }
     if (this.hourlyTimer) {
       clearInterval(this.hourlyTimer);

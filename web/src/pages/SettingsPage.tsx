@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { ErrorCallout, LoadingBlock, Panel, SuccessCallout } from '../components/Ui';
 import { formatDateTime } from '../lib/format';
@@ -65,6 +66,10 @@ export function SettingsPage() {
       <SuccessCallout message={success} />
 
       <Panel title="Synchronisation">
+        <p className="meta-line">
+          Les jours et heures de synchronisation de chaque provider se règlent dans{' '}
+          <Link to="/planification">Planification</Link>.
+        </p>
         <div className="form-grid">
           <label>
             Provider actif
@@ -76,14 +81,6 @@ export function SettingsPage() {
               <option value="myefrei">myefrei</option>
               <option value="ensup">ensup</option>
             </select>
-          </label>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={settings.syncEnabled}
-              onChange={(event) => setSettings({ ...settings, syncEnabled: event.target.checked })}
-            />
-            Activer le scheduler
           </label>
           <label className="toggle">
             <input
@@ -116,16 +113,6 @@ export function SettingsPage() {
             />
           </label>
           <label>
-            Frequence (minutes)
-            <input
-              type="number"
-              value={settings.syncFrequencyMinutes}
-              onChange={(event) =>
-                setSettings({ ...settings, syncFrequencyMinutes: Number(event.target.value) })
-              }
-            />
-          </label>
-          <label>
             Timezone
             <input
               value={settings.timezone}
@@ -145,7 +132,7 @@ export function SettingsPage() {
                 setSettings({ ...settings, runSyncOnStartup: event.target.checked })
               }
             />
-            Lancer une sync au demarrage
+            Lancer une sync des providers planifies au demarrage
           </label>
           <label className="toggle">
             <input

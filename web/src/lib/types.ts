@@ -111,3 +111,20 @@ export interface SyncJob {
 export interface RollbackJobResult {
   results: Array<{ changeId: string; status: 'ROLLED_BACK' | 'FAILED'; error?: string }>;
 }
+
+export type SchedulableProvider = 'myges' | 'myefrei' | 'ensup';
+
+export interface ProviderSchedule {
+  provider: SchedulableProvider;
+  enabled: boolean;
+  /** 0=Sun .. 6=Sat */
+  days: number[];
+  /** "HH:MM" in the app timezone */
+  times: string[];
+  pushToGoogle: boolean;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastRunStatus: string | null;
+  lastRunError: string | null;
+  lastJobId: string | null;
+}

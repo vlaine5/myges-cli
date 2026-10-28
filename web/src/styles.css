@@ -742,3 +742,212 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Planification */
+.page-intro {
+  max-width: 62ch;
+  margin: 0.5rem 0 0;
+}
+
+.schedule-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  align-items: start;
+}
+
+.schedule-summary {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+  border-radius: 14px;
+  background: rgba(79, 70, 229, 0.06);
+}
+
+.schedule-summary span {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.schedule-section {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1.1rem 0;
+  padding: 0;
+  border: 0;
+}
+
+.schedule-section legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+  color: var(--text-muted);
+}
+
+.day-picker,
+.time-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.day-chip {
+  min-width: 2.9rem;
+  min-height: 2.5rem;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: var(--surface);
+  color: #0f172a;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.day-chip:hover {
+  border-color: var(--accent);
+}
+
+.day-chip.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.time-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding-left: 0.85rem;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.1);
+  color: var(--accent-dark);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-chip button {
+  width: 2.25rem;
+  height: 2.5rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.time-chip button:hover {
+  background: rgba(79, 70, 229, 0.14);
+}
+
+.time-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.time-add input {
+  width: auto;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-add .button {
+  min-height: 2.5rem;
+  padding: 0 0.9rem;
+}
+
+.field-hint {
+  margin: 0.25rem 0 0;
+  color: var(--warn);
+  font-size: 0.88rem;
+}
+
+.field-hint-error {
+  color: var(--error);
+  overflow-wrap: anywhere;
+}
+
+.schedule-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--panel-border);
+}
+
+.schedule-footer .meta-line {
+  margin: 0;
+}
+
+.schedule-footer a,
+.schedule-grid .meta-line a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.schedule-footer .actions-row {
+  margin-top: 0;
+}
+
+.callout-warn {
+  background: rgba(180, 83, 9, 0.1);
+  color: var(--warn);
+}
+
+.callout a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* Keyboard focus, app-wide */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Narrow screens: the sidebar becomes a compact top bar with a scrollable nav */
+@media (max-width: 980px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    min-width: 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+  }
+
+  .sidebar h1 {
+    margin: 0;
+    font-size: 1.2rem;
+  }
+
+  .sidebar .eyebrow,
+  .sidebar .muted {
+    display: none;
+  }
+
+  .nav {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 0.4rem;
+    scrollbar-width: none;
+  }
+
+  .nav-link {
+    flex: none;
+    padding: 0.5rem 0.85rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+}

@@ -14,7 +14,7 @@ export function createSystemRouter(services: Services) {
       response.json({
         status: 'ok',
         version: appInfo.version,
-        scheduler: services.schedulerService.getStatus(),
+        scheduler: await services.schedulerService.getStatus(),
       });
     }),
   );
@@ -39,7 +39,7 @@ export function createSystemRouter(services: Services) {
       response.json({
         version: appInfo.version,
         uptimeSeconds: Math.round(process.uptime()),
-        scheduler: services.schedulerService.getStatus(),
+        scheduler: await services.schedulerService.getStatus(),
         providers,
         activeProvider: activeProviderId,
         google,
@@ -66,7 +66,7 @@ export function createSystemRouter(services: Services) {
         provider,
         google,
         settings,
-        scheduler: services.schedulerService.getStatus(),
+        scheduler: await services.schedulerService.getStatus(),
         lastJob,
       });
     }),

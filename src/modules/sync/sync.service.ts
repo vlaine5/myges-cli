@@ -25,6 +25,8 @@ export interface SyncRunOptions {
   dryRun?: boolean;
   providerId?: AcademicProviderId;
   agendaId?: string;
+  /** Set to false to refresh locally only; Google is also skipped when disabled in settings. */
+  pushToGoogle?: boolean;
   range?: {
     start: Date;
     end: Date;
@@ -420,6 +422,7 @@ export class SyncService {
     const range =
       options.range ??
       getRangeFromOffsets(settings.syncLookbackDays, settings.syncFutureDays);
+    const pushToGoogle = settings.googleSyncEnabled && (options.pushToGoogle ?? true);
 
     const job = await this.prisma.syncJob.create({
       data: {
@@ -521,7 +524,7 @@ export class SyncService {
       let updatedCount = 0;
       let deletedCount = 0;
 
-      if (settings.googleSyncEnabled) {
+      if (pushToGoogle) {
         const calendarIdCache = new Map<string, string>();
         const resolveCalendarId = async (providerId: AcademicProviderId) => {
           const cached = calendarIdCache.get(providerId);
@@ -692,9 +695,11 @@ export class SyncService {
           deletedCount,
           unchangedCount: plan.unchanged.length,
           exportedCount,
-          summary: settings.googleSyncEnabled
+          summary: pushToGoogle
             ? `${provider.displayName} -> Google sync completed with ${createdCount} created, ${updatedCount} updated, ${deletedCount} deleted.`
-            : `${provider.displayName} sync completed locally; Google sync is disabled in settings.`,
+            : settings.googleSyncEnabled
+              ? `${provider.displayName} sync completed locally; Google push is off for this run.`
+              : `${provider.displayName} sync completed locally; Google sync is disabled in settings.`,
         },
       });
 
@@ -727,7 +732,7 @@ export class SyncService {
         exportedCount,
         exportPath,
         dryRun: options.dryRun ?? false,
-        googleSyncEnabled: settings.googleSyncEnabled,
+        googleSyncEnabled: pushToGoogle,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown sync error';

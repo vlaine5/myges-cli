@@ -8,7 +8,7 @@ Stack unique :
 - backend Express en TypeScript
 - frontend React / Vite
 - persistance SQLite + Prisma
-- scheduler interne
+- scheduler interne par provider (jours + heures, page `/planification`)
 - export ICS
 - synchronisation Google Calendar
 - architecture multi-provider (MyGES, myEfrei, Ensup/HyperPlanning)
@@ -192,6 +192,12 @@ Dossier académique MyGES (lecture seule) :
 `GET /api/sync/history`, `GET /api/sync/jobs/:jobId/changes`,
 `POST /api/sync/jobs/:jobId/changes/:changeId/rollback`, `POST /api/sync/jobs/:jobId/rollback`.
 
+Planification : `GET /api/schedules`, `PUT /api/schedules/:provider`
+(`{ enabled, days: [0-6, 0=dimanche], times: ["HH:MM"], pushToGoogle }`),
+`POST /api/schedules/:provider/run`. Chaque provider a ses jours et heures (fuseau `AppSettings.timezone`) ;
+à chaque créneau, l'agenda du provider est relu puis seules les modifications sont poussées vers Google.
+Un créneau manqué (serveur arrêté, autre sync en cours) est rattrapé s'il a moins de 12 h.
+
 Export / ICS / stats : `GET /api/export/ics`, `GET /api/export/ics/latest`, `POST /api/ics/sync`,
 `GET /api/stats/teaching`.
 
@@ -254,8 +260,10 @@ Infra (requis) : `NODE_ENV`, `HOST`, `PORT`, `APP_BASE_URL`, `APP_SECRET`, `DATA
 `APP_DATA_DIR`, `LOG_LEVEL`, `GOOGLE_OAUTH_SCOPES` (relue à chaque OAuth, jamais stockée).
 
 Paramètres de sync (seed unique dans `AppSettings`, modifiables via `/settings`) : `ACADEMIC_PROVIDER`,
-`SYNC_ENABLED`, `SYNC_LOOKBACK_DAYS`, `SYNC_FUTURE_DAYS`, `SYNC_FREQUENCY_MINUTES`,
-`SYNC_RUN_ON_STARTUP`, `GOOGLE_SYNC_ENABLED`, `SAVE_LAST_ICS`, `STORE_RAW_PAYLOAD`, `TIMEZONE`.
+`SYNC_LOOKBACK_DAYS`, `SYNC_FUTURE_DAYS`, `SYNC_RUN_ON_STARTUP`, `GOOGLE_SYNC_ENABLED`, `SAVE_LAST_ICS`,
+`STORE_RAW_PAYLOAD`, `TIMEZONE`. `SYNC_ENABLED` / `SYNC_FREQUENCY_MINUTES` ne pilotent plus le scheduler :
+la planification se règle par provider dans `/planification` (un ancien scheduler actif est converti une fois
+en « tous les jours à `syncHour` » pour le provider actif).
 
 Identifiants providers (optionnel, bootstrap unique — configurables ensuite via `/provider`) :
 

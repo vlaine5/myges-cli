@@ -25,7 +25,11 @@ export function ErrorCallout({ message }: { message: string | null }) {
     return null;
   }
 
-  return <div className="callout callout-error">{message}</div>;
+  return (
+    <div className="callout callout-error" role="alert">
+      {message}
+    </div>
+  );
 }
 
 export function SuccessCallout({ message }: { message: string | null }) {
@@ -33,7 +37,11 @@ export function SuccessCallout({ message }: { message: string | null }) {
     return null;
   }
 
-  return <div className="callout callout-success">{message}</div>;
+  return (
+    <div className="callout callout-success" role="status">
+      {message}
+    </div>
+  );
 }
 
 export function LoadingBlock({ label = 'Chargement...' }: { label?: string }) {
