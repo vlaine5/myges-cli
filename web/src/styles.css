@@ -951,3 +951,68 @@ tbody tr:hover {
     white-space: nowrap;
   }
 }
+
+/* Notifications */
+.notify-types {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.horizon-field {
+  margin-top: 1rem;
+  max-width: 34rem;
+}
+
+.horizon-field input {
+  max-width: 8rem;
+}
+
+.save-bar {
+  align-items: center;
+  margin-top: 0;
+}
+
+.notification-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.notification-log li {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.notification-log li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.field-note {
+  margin: 0.5rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.panel > .toggle + .form-grid {
+  margin-top: 1rem;
+}
+
+.notification-message summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 0.88rem;
+  margin-top: 0.35rem;
+}
+
+.notification-message pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.04);
+}

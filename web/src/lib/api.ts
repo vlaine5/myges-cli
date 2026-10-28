@@ -2,6 +2,9 @@ import type {
   EventMatch,
   GlobalEvent,
   GlobalEventDetail,
+  NotificationLogEntry,
+  NotificationSettings,
+  NotificationSettingsInput,
   ProviderSchedule,
   SchedulableProvider,
   RollbackJobResult,
@@ -132,6 +135,18 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   runSchedule: (provider: SchedulableProvider) => request(`/schedules/${provider}/run`, { method: 'POST' }),
+  getNotificationSettings: () => request<NotificationSettings>('/notifications/settings'),
+  saveNotificationSettings: (payload: NotificationSettingsInput) =>
+    request<NotificationSettings>('/notifications/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  testNotification: (channel: 'email' | 'webhook') =>
+    request<{ ok: true }>('/notifications/test', {
+      method: 'POST',
+      body: JSON.stringify({ channel }),
+    }),
+  listNotificationLog: () => request<NotificationLogEntry[]>('/notifications/log'),
   getSettings: () => request('/settings'),
   saveSettings: (payload: unknown) =>
     request('/settings', {

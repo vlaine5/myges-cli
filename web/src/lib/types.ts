@@ -128,3 +128,51 @@ export interface ProviderSchedule {
   lastRunError: string | null;
   lastJobId: string | null;
 }
+
+export type SmtpSecurity = 'starttls' | 'tls' | 'none';
+export type WebhookFormat = 'json' | 'discord' | 'slack';
+
+export interface NotificationSettings {
+  emailEnabled: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecurity: SmtpSecurity;
+  smtpUser: string;
+  smtpPasswordSet: boolean;
+  emailFrom: string;
+  /** Comma-separated addresses */
+  emailTo: string;
+  webhookEnabled: boolean;
+  webhookUrlSet: boolean;
+  /** Scheme and host of the stored URL; the URL itself is never sent back */
+  webhookUrlHint: string | null;
+  webhookFormat: WebhookFormat;
+  notifyAdded: boolean;
+  notifyUpdated: boolean;
+  notifyRemoved: boolean;
+  horizonDays: number;
+}
+
+export type NotificationSettingsInput = Omit<
+  NotificationSettings,
+  'smtpPasswordSet' | 'webhookUrlSet' | 'webhookUrlHint'
+> & {
+  /** Empty or omitted: keep the stored password; null: remove it */
+  smtpPassword?: string | null;
+  /** Empty or omitted: keep the stored URL; null: remove it */
+  webhookUrl?: string | null;
+};
+
+export interface NotificationLogEntry {
+  id: string;
+  createdAt: string;
+  provider: string | null;
+  channel: 'email' | 'webhook';
+  status: 'SENT' | 'FAILED';
+  test: boolean;
+  changeCount: number;
+  summary: string;
+  /** Plain-text body that was sent, or failed to be */
+  message: string | null;
+  error: string | null;
+}

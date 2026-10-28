@@ -11,6 +11,7 @@ import { GoogleCalendarService } from './modules/google/google-calendar.service'
 import { EnsupProvider } from './modules/providers/ensup.provider';
 import { MyEfreiProvider } from './modules/providers/myefrei.provider';
 import { MyGesProvider } from './modules/providers/myges.provider';
+import { NotificationService } from './modules/notifications/notification.service';
 import { ProviderRegistryService } from './modules/providers/provider-registry.service';
 import { ProviderCredentialStore } from './modules/providers/provider-credential.store';
 import { ReconciliationService } from './modules/reconciliation/reconciliation.service';
@@ -40,6 +41,7 @@ export function createServices(prisma: PrismaClient) {
   const googleCalendarService = new GoogleCalendarService(googleAuthService);
   const reconciliationService = new ReconciliationService(prisma, googleCalendarService);
   const icsExportService = new IcsExportService(prisma);
+  const notificationService = new NotificationService(prisma, providerRegistryService);
   const syncService = new SyncService(
     prisma,
     eventsService,
@@ -48,6 +50,7 @@ export function createServices(prisma: PrismaClient) {
     googleCalendarService,
     icsExportService,
     reconciliationService,
+    notificationService,
   );
   const icsSyncService = new IcsSyncService(prisma, reconciliationService);
   const agendaService = new AgendaService(
@@ -56,6 +59,7 @@ export function createServices(prisma: PrismaClient) {
     icsSyncService,
     providerRegistryService,
     syncService,
+    notificationService,
   );
   const providerScheduleService = new ProviderScheduleService(prisma);
   const schedulerService = new SchedulerService(prisma, syncService, providerScheduleService, agendaService);
@@ -72,6 +76,7 @@ export function createServices(prisma: PrismaClient) {
     googleCalendarService,
     reconciliationService,
     icsExportService,
+    notificationService,
     syncService,
     providerScheduleService,
     schedulerService,

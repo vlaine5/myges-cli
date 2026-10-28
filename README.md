@@ -9,6 +9,7 @@ Stack unique :
 - frontend React / Vite
 - persistance SQLite + Prisma
 - scheduler interne par provider (jours + heures, page `/planification`)
+- notifications des changements de planning par e-mail (SMTP) et/ou webhook (page `/notifications`)
 - export ICS
 - synchronisation Google Calendar
 - architecture multi-provider (MyGES, myEfrei, Ensup/HyperPlanning)
@@ -197,6 +198,15 @@ Planification : `GET /api/schedules`, `PUT /api/schedules/:provider`
 `POST /api/schedules/:provider/run`. Chaque provider a ses jours et heures (fuseau `AppSettings.timezone`) ;
 à chaque créneau, l'agenda du provider est relu puis seules les modifications sont poussées vers Google.
 Un créneau manqué (serveur arrêté, autre sync en cours) est rattrapé s'il a moins de 12 h.
+
+Notifications : `GET /api/notifications/settings`, `PUT /api/notifications/settings`,
+`POST /api/notifications/test` (`{ channel: "email" | "webhook" }`), `GET /api/notifications/log`.
+À chaque sync d'un provider, son planning à venir est comparé à celui d'avant : s'il a changé, la liste des
+cours ajoutés, modifiés (horaire, salle, intervenant…) ou annulés part par e-mail et/ou webhook (JSON détaillé,
+Discord ou Slack). Un planning identique n'envoie rien, la première récupération d'un provider non plus, et seuls
+les cours des `horizonDays` prochains jours sont signalés. Le mot de passe SMTP et l'URL du webhook sont chiffrés
+avec `APP_SECRET` et jamais renvoyés par l'API ; un envoi en échec est retenté deux fois puis consigné avec son
+contenu dans le journal.
 
 Export / ICS / stats : `GET /api/export/ics`, `GET /api/export/ics/latest`, `POST /api/ics/sync`,
 `GET /api/stats/teaching`.

@@ -5,6 +5,7 @@ import { ProviderPage } from './pages/ProviderPage';
 import { GooglePage } from './pages/GooglePage';
 import { AgendaPage } from './pages/AgendaPage';
 import { SyncPage } from './pages/SyncPage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { SchedulesPage } from './pages/SchedulesPage';
 import { SyncJobDetailPage } from './pages/SyncJobDetailPage';
 import { MatchesPage } from './pages/MatchesPage';
@@ -26,6 +27,7 @@ export function App() {
         <Route path="/events" element={<AgendaPage />} />
         <Route path="/matches" element={<MatchesPage />} />
         <Route path="/planification" element={<SchedulesPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/sync" element={<SyncPage />} />
         <Route path="/sync/:jobId" element={<SyncJobDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />

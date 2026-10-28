@@ -68,6 +68,51 @@ model ProviderSchedule {
   updatedAt     DateTime  @updatedAt
 }
 
+// Where planning-change notifications go (single row, id = 1). Secrets (SMTP
+// password, webhook URL, which embeds its token) are stored encrypted.
+model NotificationSettings {
+  id                    Int      @id @default(1)
+  emailEnabled          Boolean  @default(false)
+  smtpHost              String?
+  smtpPort              Int      @default(587)
+  // "starttls" | "tls" | "none"
+  smtpSecurity          String   @default("starttls")
+  smtpUser              String?
+  smtpPasswordEncrypted String?
+  emailFrom             String?
+  // Comma-separated recipient addresses
+  emailTo               String?
+  webhookEnabled        Boolean  @default(false)
+  webhookUrlEncrypted   String?
+  // "json" | "discord" | "slack"
+  webhookFormat         String   @default("json")
+  notifyAdded           Boolean  @default(true)
+  notifyUpdated         Boolean  @default(true)
+  notifyRemoved         Boolean  @default(true)
+  // Only changes to events starting within this many days are notified
+  horizonDays           Int      @default(14)
+  updatedAt             DateTime @updatedAt
+}
+
+// One delivery attempt of a notification on one channel.
+model NotificationLog {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  provider    String?
+  // "email" | "webhook"
+  channel     String
+  // "SENT" | "FAILED"
+  status      String
+  test        Boolean  @default(false)
+  changeCount Int      @default(0)
+  summary     String
+  // Plain-text body that was sent (or failed to be)
+  message     String?
+  error       String?
+
+  @@index([createdAt])
+}
+
 model AcademicProviderCredential {
   provider             String   @id
   authMode             String?

@@ -8,6 +8,7 @@ const navigation = [
   { to: '/provider', label: 'Provider' },
   { to: '/google', label: 'Google' },
   { to: '/planification', label: 'Planification' },
+  { to: '/notifications', label: 'Notifications' },
   { to: '/sync', label: 'Sync' },
   { to: '/teaching', label: 'Heures ens.' },
   { to: '/effectifs', label: 'Effectifs' },

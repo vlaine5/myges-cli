@@ -12,6 +12,7 @@ import type { ProviderRegistryService } from '../providers/provider-registry.ser
 import type { SettingsService } from '../settings/settings.service';
 import type { GoogleCalendarService } from '../google/google-calendar.service';
 import type { IcsExportService } from '../export/ics-export.service';
+import type { NotificationService } from '../notifications/notification.service';
 import type { ReconciliationService } from '../reconciliation/reconciliation.service';
 import {
   planSyncActions,
@@ -44,6 +45,7 @@ export class SyncService {
     private readonly googleCalendarService: GoogleCalendarService,
     private readonly icsExportService: IcsExportService,
     private readonly reconciliationService: ReconciliationService,
+    private readonly notificationService?: NotificationService,
   ) {}
 
   isRunning() {
@@ -436,15 +438,24 @@ export class SyncService {
     });
 
     try {
-      const refreshResult = await this.eventsService.refreshRange(range, {
-        includeRawPayload: settings.storeRawPayload,
-        providerId: provider.id,
-        agendaId: options.agendaId,
-      });
+      const refreshProvider = async () => {
+        const result = await this.eventsService.refreshRange(range, {
+          includeRawPayload: settings.storeRawPayload,
+          providerId: provider.id,
+          agendaId: options.agendaId,
+        });
 
-      // Reconciliation only runs for snapshots newly created this run, and only
-      // after the upsert transaction above has committed.
-      await this.reconciliationService.reconcileNewSnapshots(refreshResult.newSnapshotIds);
+        // Reconciliation only runs for snapshots newly created this run, and only
+        // after the upsert transaction above has committed.
+        await this.reconciliationService.reconcileNewSnapshots(result.newSnapshotIds);
+        return result;
+      };
+      // Planning changes are notified right after the local refresh, before
+      // Google: they are committed locally, so a later Google failure must not
+      // swallow them.
+      const refreshResult = this.notificationService
+        ? await this.notificationService.trackPlanningChanges(provider.id, refreshProvider)
+        : await refreshProvider();
 
       // The GlobalEventIds touched by this provider's fetch this run.
       const touchedSnapshots = await this.prisma.eventSnapshot.findMany({

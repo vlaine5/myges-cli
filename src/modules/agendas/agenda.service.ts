@@ -9,6 +9,7 @@ import type { EventsService } from '../events/events.service';
 import type { IcsSyncService } from '../sync/ics-sync.service';
 import type { ProviderRegistryService } from '../providers/provider-registry.service';
 import type { SyncService } from '../sync/sync.service';
+import type { NotificationService } from '../notifications/notification.service';
 
 export const DAY_NAMES = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'] as const;
 
@@ -126,6 +127,7 @@ export class AgendaService {
     private readonly icsSyncService: IcsSyncService,
     private readonly providerRegistryService: ProviderRegistryService,
     private readonly syncService: SyncService,
+    private readonly notificationService?: NotificationService,
   ) {}
 
   async list(): Promise<AgendaDto[]> {
@@ -283,11 +285,11 @@ export class AgendaService {
             status: 'SUCCESS',
           };
         } else {
-          const syncResult = await this.icsSyncService.syncFromIcs(
-            row.provider as AcademicProviderId,
-            icsUrl,
-            { agendaId: row.id },
-          );
+          const agendaProvider = row.provider as AcademicProviderId;
+          const refreshAgenda = () => this.icsSyncService.syncFromIcs(agendaProvider, icsUrl, { agendaId: row.id });
+          const syncResult = this.notificationService
+            ? await this.notificationService.trackPlanningChanges(agendaProvider, refreshAgenda)
+            : await refreshAgenda();
           result = {
             agendaId: row.id,
             agendaName: row.name,
