@@ -78,6 +78,15 @@ export function createGoogleRouter(services: Services) {
   );
 
   router.post(
+    '/oauth/exchange',
+    asyncHandler(async (request, response) => {
+      const body = z.object({ redirectedUrl: z.string().min(1) }).parse(request.body);
+      await services.googleAuthService.handleOAuthRedirectUrl(body.redirectedUrl);
+      response.json({ ok: true, status: await services.googleAuthService.getStatus() });
+    }),
+  );
+
+  router.post(
     '/disconnect',
     asyncHandler(async (_request, response) => {
       await services.googleAuthService.disconnect();

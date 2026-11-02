@@ -38,6 +38,52 @@ export function AgendaPage() {
     });
   }, []);
 
+  const [pdfOptions, setPdfOptions] = useState<{ providers: string[]; subjects: { provider: string; subject: string; count: number }[] } | null>(null);
+  const [pdfProviders, setPdfProviders] = useState<string[]>([]);
+  const [pdfSubjects, setPdfSubjects] = useState<string[]>([]);
+  const [pdfGroup, setPdfGroup] = useState<'none' | 'provider' | 'subject'>('provider');
+
+  const pdfRange = () =>
+    new URLSearchParams({ start: `${start}T00:00:00.000Z`, end: `${end}T23:59:59.999Z` });
+
+  async function loadPdfOptions() {
+    try {
+      const options = await api.getPdfOptions(pdfRange());
+      setPdfOptions(options);
+      setPdfProviders(options.providers);
+      setPdfSubjects([]);
+    } catch (pdfError) {
+      setError(pdfError instanceof Error ? pdfError.message : 'Options PDF indisponibles.');
+    }
+  }
+
+  function pdfUrl(params: { providers?: string[]; subjects?: string[]; group: string; title?: string }) {
+    const search = pdfRange();
+    if (params.providers?.length) search.set('providers', params.providers.join(','));
+    if (params.subjects?.length) search.set('subjects', params.subjects.join('|'));
+    search.set('group', params.group);
+    if (params.title) search.set('title', params.title);
+    return `/api/export/pdf?${search.toString()}`;
+  }
+
+  function download(url: string) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.click();
+  }
+
+  function downloadSeparately(kind: 'provider' | 'subject') {
+    const targets =
+      kind === 'provider'
+        ? pdfProviders.map((value) => ({ providers: [value], title: `Planning ${value}` }))
+        : (pdfOptions?.subjects ?? [])
+            .filter((entry) => pdfProviders.includes(entry.provider) && (!pdfSubjects.length || pdfSubjects.includes(entry.subject)))
+            .map((entry) => ({ providers: [entry.provider], subjects: [entry.subject], title: entry.subject }));
+    targets.forEach((target, index) => {
+      setTimeout(() => download(pdfUrl({ ...target, group: 'none' })), index * 600);
+    });
+  }
+
   async function load(refresh: boolean) {
     setLoading(true);
     setError(null);
@@ -101,6 +147,82 @@ export function AgendaPage() {
             Recharger depuis la source
           </button>
         </div>
+      </Panel>
+
+      <Panel title="Export PDF">
+        <p className="meta-line">Utilise la periode ci-dessus. Charge les ecoles et matieres disponibles, puis choisis.</p>
+        <div className="actions-row">
+          <button className="button button-secondary" onClick={() => void loadPdfOptions()}>
+            Charger les ecoles / matieres
+          </button>
+        </div>
+        {pdfOptions ? (
+          <>
+            <div className="form-grid">
+              <label className="full-width">
+                Ecoles
+                <span style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  {pdfOptions.providers.map((value) => (
+                    <span key={value}>
+                      <input
+                        type="checkbox"
+                        checked={pdfProviders.includes(value)}
+                        onChange={(event) =>
+                          setPdfProviders((current) =>
+                            event.target.checked ? [...current, value] : current.filter((entry) => entry !== value),
+                          )
+                        }
+                      />{' '}
+                      {value}
+                    </span>
+                  ))}
+                </span>
+              </label>
+              <label className="full-width">
+                Matieres (aucune cochee = toutes)
+                <select
+                  multiple
+                  size={8}
+                  value={pdfSubjects}
+                  onChange={(event) =>
+                    setPdfSubjects(Array.from(event.target.selectedOptions, (option) => option.value))
+                  }
+                >
+                  {pdfOptions.subjects
+                    .filter((entry) => pdfProviders.includes(entry.provider))
+                    .map((entry) => (
+                      <option key={`${entry.provider}|${entry.subject}`} value={entry.subject}>
+                        {entry.subject} ({entry.provider}, {entry.count})
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                Regrouper par
+                <select value={pdfGroup} onChange={(event) => setPdfGroup(event.target.value as 'none' | 'provider' | 'subject')}>
+                  <option value="provider">Ecole (une page par ecole)</option>
+                  <option value="subject">Matiere (une page par matiere)</option>
+                  <option value="none">Chronologique</option>
+                </select>
+              </label>
+            </div>
+            <div className="actions-row">
+              <button
+                className="button"
+                disabled={!pdfProviders.length}
+                onClick={() => download(pdfUrl({ providers: pdfProviders, subjects: pdfSubjects, group: pdfGroup }))}
+              >
+                PDF tout ensemble
+              </button>
+              <button className="button button-secondary" disabled={!pdfProviders.length} onClick={() => downloadSeparately('provider')}>
+                Un PDF par ecole
+              </button>
+              <button className="button button-secondary" disabled={!pdfProviders.length} onClick={() => downloadSeparately('subject')}>
+                Un PDF par matiere
+              </button>
+            </div>
+          </>
+        ) : null}
       </Panel>
 
       <ErrorCallout message={error} />

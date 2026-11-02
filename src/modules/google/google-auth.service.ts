@@ -181,6 +181,32 @@ export class GoogleAuthService {
     });
   }
 
+  /**
+   * Finish the OAuth flow from the URL Google redirected the browser to, pasted
+   * by the user. Lets a remote install connect without a tunnel back to the
+   * redirect URL (typically http://localhost).
+   */
+  async handleOAuthRedirectUrl(redirectedUrl: string) {
+    let parsed: URL;
+    try {
+      parsed = new URL(redirectedUrl.trim());
+    } catch {
+      throw new AppError('URL de redirection invalide : colle l\'adresse complète.', 400, 'GOOGLE_REDIRECT_URL_INVALID');
+    }
+
+    const error = parsed.searchParams.get('error');
+    const code = parsed.searchParams.get('code');
+    const state = parsed.searchParams.get('state');
+    if (error) {
+      throw new AppError(`Google a refusé l'accès : ${error}.`, 400, 'GOOGLE_ACCESS_DENIED');
+    }
+    if (!code || !state) {
+      throw new AppError('L\'URL ne contient pas de paramètres code/state.', 400, 'GOOGLE_REDIRECT_URL_INVALID');
+    }
+
+    await this.handleOAuthCallback(code, state);
+  }
+
   async getAuthorizedClient(): Promise<OAuth2Client> {
     await this.assertConfigured();
 

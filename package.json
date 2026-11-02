@@ -1,6 +1,6 @@
 {
   "name": "myges-app",
-  "version": "5.4.1",
+  "version": "5.5.0",
   "private": true,
   "description": "Personal academic sync service with multi-provider API, web UI, SQLite persistence and Google Calendar integration.",
   "engines": {
@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@types/pdfkit": "^0.17.7",
     "better-sqlite3": "^12.8.0",
     "concurrently": "^9.0.1",
     "date-fns": "^3.6.0",
@@ -32,6 +33,7 @@
     "express": "^4.21.1",
     "googleapis": "^144.0.0",
     "nodemailer": "10.0.16",
+    "pdfkit": "^0.20.2",
     "pino": "^9.5.0",
     "pino-http": "^10.3.0",
     "react": "^18.3.1",

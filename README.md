@@ -161,6 +161,10 @@ sélectionner ou en créer un **par provider**.
 
 Configuration : `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URL`.
 
+Connexion sans tunnel : après l'autorisation, copie l'URL `localhost` où le navigateur atterrit et colle-la dans `/google` (« Connexion sans tunnel SSH »). Passe l'écran de consentement en « Production » pour éviter l'expiration du jeton au bout de 7 jours.
+
+Export PDF : page Evenements → « Export PDF » (`GET /api/export/pdf?providers=&subjects=&group=provider|subject|none&start=&end=`).
+
 ## myEfrei & Ensup
 
 - **myEfrei** : `username/password` (bloqué par reCAPTCHA), `session cookie`, `session cookie +

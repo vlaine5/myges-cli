@@ -110,6 +110,11 @@ export const api = {
     request<{ authUrl: string }>('/google/oauth/start', {
       method: 'POST',
     }),
+  exchangeGoogleRedirect: (redirectedUrl: string) =>
+    request('/google/oauth/exchange', {
+      method: 'POST',
+      body: JSON.stringify({ redirectedUrl }),
+    }),
   disconnectGoogle: () =>
     request('/google/disconnect', {
       method: 'POST',
@@ -153,6 +158,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+  getPdfOptions: (search: URLSearchParams) =>
+    request<{ providers: string[]; subjects: { provider: string; subject: string; count: number }[] }>(
+      `/export/pdf/options?${search.toString()}`,
+    ),
   getEvents: (search: URLSearchParams) => request(`/events?${search.toString()}`),
   getActiveProviders: (start?: string, end?: string) => {
     const p = new URLSearchParams();

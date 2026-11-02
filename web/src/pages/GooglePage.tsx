@@ -19,6 +19,7 @@ export function GooglePage() {
   const [newCalendarName, setNewCalendarName] = useState('Academic Sync - MyGES');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pastedUrl, setPastedUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(
     searchParams.get('status') === 'connected' ? 'Connexion Google reussie.' : null,
@@ -73,6 +74,21 @@ export function GooglePage() {
       window.location.href = result.authUrl;
     } catch (connectError) {
       setError(connectError instanceof Error ? connectError.message : 'Impossible de demarrer OAuth.');
+      setBusy(false);
+    }
+  }
+
+  async function handleExchange() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.exchangeGoogleRedirect(pastedUrl.trim());
+      setPastedUrl('');
+      setSuccess('Connexion Google reussie.');
+      await load();
+    } catch (exchangeError) {
+      setError(exchangeError instanceof Error ? exchangeError.message : 'Echange du code impossible.');
+    } finally {
       setBusy(false);
     }
   }
@@ -267,6 +283,33 @@ export function GooglePage() {
             >
               {showOauthForm ? 'Masquer les credentials' : 'Modifier les credentials OAuth'}
             </button>
+          </Panel>
+
+          <Panel title="Connexion sans tunnel SSH">
+            <p className="meta-line">
+              Clique sur « Connecter avec Google », autorise l'acces : le navigateur finit sur une page
+              inaccessible (localhost). Copie alors l'adresse complete de cette page et colle-la ici.
+            </p>
+            <div className="form-grid">
+              <label className="full-width">
+                Adresse de redirection
+                <input
+                  value={pastedUrl}
+                  placeholder="http://localhost:3000/api/google/oauth/callback?state=...&code=..."
+                  onChange={(event) => setPastedUrl(event.target.value)}
+                />
+              </label>
+            </div>
+            <div className="actions-row">
+              <button className="button" disabled={busy || !pastedUrl.trim()} onClick={() => void handleExchange()}>
+                Finaliser la connexion
+              </button>
+            </div>
+            <p className="meta-line">
+              Si l'ecran de consentement Google est en mode « Testing », le jeton expire apres 7 jours :
+              passe-le en « Production » (Google Cloud → Ecran de consentement OAuth) pour ne plus avoir a
+              reconnecter.
+            </p>
           </Panel>
 
           {showOauthForm ? (
