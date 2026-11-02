@@ -4,15 +4,7 @@ import type { Services } from '../services';
 import { asyncHandler } from '../lib/http';
 import { ProviderCredentialStore } from '../modules/providers/provider-credential.store';
 import type { AcademicProviderId } from '../modules/events/types';
-import { fetchAndParseIcs } from '../lib/ics-parser';
-
-function normalizeIcsUrl(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-    return `https://${trimmed}`;
-  }
-  return trimmed;
-}
+import { fetchAndParseIcs, normalizeIcsUrl } from '../lib/ics-parser';
 
 const icsSyncSchema = z.object({
   provider: z.enum(['myges', 'myefrei', 'ensup']),

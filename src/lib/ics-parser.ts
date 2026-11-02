@@ -223,6 +223,20 @@ export function parseIcs(rawContent: string): IcsEvent[] {
   return events;
 }
 
+/** How a calendar link was given: `webcal://` subscriptions are plain HTTPS feeds. */
+export function isWebcalUrl(raw: string) {
+  return /^webcals?:\/\//i.test(raw.trim());
+}
+
+/** Trims the link and turns `webcal(s)://` (or a missing scheme) into `https://`. */
+export function normalizeIcsUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (/^webcals:\/\//i.test(trimmed)) return trimmed.replace(/^webcals:/i, 'https:');
+  if (/^webcal:\/\//i.test(trimmed)) return trimmed.replace(/^webcal:/i, 'https:');
+  if (!/^https?:\/\//i.test(trimmed)) return `https://${trimmed}`;
+  return trimmed;
+}
+
 const ICS_FETCH_ATTEMPTS = 3;
 const ICS_FETCH_TIMEOUT_MS = 20_000;
 
@@ -242,7 +256,8 @@ async function fetchIcsOnce(icsUrl: string): Promise<Response> {
   });
 }
 
-export async function fetchAndParseIcs(icsUrl: string): Promise<IcsEvent[]> {
+export async function fetchAndParseIcs(rawIcsUrl: string): Promise<IcsEvent[]> {
+  const icsUrl = normalizeIcsUrl(rawIcsUrl);
   let response: Response | null = null;
   let failure = '';
 

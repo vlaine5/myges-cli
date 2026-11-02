@@ -11,6 +11,8 @@ function readHasIcsUrl(config: Record<string, unknown> | undefined | null): bool
   return Boolean(config.icsUrl);
 }
 
+const METHOD_LABELS: Record<string, string> = { api: 'API / identifiants', ics: 'Lien ICS', webcal: 'Lien Webcal' };
+
 export function ProviderPage() {
   const [settings, setSettings] = useState<any | null>(null);
   const [status, setStatus] = useState<any | null>(null);
@@ -230,6 +232,10 @@ export function ProviderPage() {
       </Panel>
 
       <Panel title="Etat actuel">
+        <p className="meta-line">
+          Source de synchronisation :{' '}
+          <StatusBadge tone="ok">{METHOD_LABELS[status?.connectionMethod ?? 'api']}</StatusBadge>
+        </p>
         <StatusBadge tone={status?.configured ? 'ok' : 'warn'}>
           {status?.configured ? 'Connecte' : 'Non configure'}
         </StatusBadge>
@@ -345,9 +351,16 @@ export function ProviderPage() {
         </div>
       </Panel>
 
-      <Panel title="Lien ICS (optionnel)">
+      <Panel title="Lien ICS / Webcal (optionnel)">
         <p className="meta-line">
-          Si une URL ICS est enregistrée ici, elle remplace la connexion API/identifiants
+          Méthode de connexion active :{' '}
+          <StatusBadge tone={status?.connectionMethod === 'api' ? 'muted' : 'ok'}>
+            {METHOD_LABELS[status?.connectionMethod ?? 'api'] ?? status?.connectionMethod}
+          </StatusBadge>{' '}
+          (une seule méthode par provider)
+        </p>
+        <p className="meta-line">
+          Si un lien ICS ou webcal:// est enregistré ici (webcal:// est lu comme https://), il remplace la connexion API/identifiants
           ci-dessus comme source pour toutes les synchronisations de ce provider (planifiées et
           manuelles), selon le modèle "un provider = un agenda synchronisé". Clique sur
           &quot;Supprimer le lien ICS&quot; pour revenir à l&apos;API/identifiants.
@@ -358,11 +371,11 @@ export function ProviderPage() {
         </p>
         <div className="form-grid">
           <label className="full-width">
-            URL ICS
+            URL ICS ou webcal://
             <input
               value={icsUrl}
               onChange={(e) => setIcsUrl(e.target.value)}
-              placeholder="https://..."
+              placeholder="https://... ou webcal://..."
               disabled={icsSaving || icsTesting}
             />
           </label>
@@ -370,8 +383,9 @@ export function ProviderPage() {
         {icsResult ? <p className="meta-line" style={{ color: 'var(--ok)' }}>{icsResult}</p> : null}
         {hasStoredIcsUrl ? (
           <p className="meta-line">
-            <StatusBadge tone="ok">Connecte via ICS</StatusBadge> Une URL ICS est actuellement
-            enregistrée et utilisée pour la synchronisation de ce provider.
+            <StatusBadge tone="ok">Connecte via {status?.connectionMethod === 'webcal' ? 'Webcal' : 'ICS'}</StatusBadge> Un lien
+            {status?.connectionMethod === 'webcal' ? ' webcal://' : ' ICS'} est actuellement
+            enregistré et utilisé pour la synchronisation de ce provider.
           </p>
         ) : (
           <p className="meta-line">Aucune URL ICS enregistrée — l&apos;API/identifiants ci-dessus sont utilisés.</p>
