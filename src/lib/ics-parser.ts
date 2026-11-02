@@ -223,23 +223,51 @@ export function parseIcs(rawContent: string): IcsEvent[] {
   return events;
 }
 
-export async function fetchAndParseIcs(icsUrl: string): Promise<IcsEvent[]> {
-  let response: Response;
+const ICS_FETCH_ATTEMPTS = 3;
+const ICS_FETCH_TIMEOUT_MS = 20_000;
 
-  try {
-    response = await fetch(icsUrl, {
-      headers: {
-        Accept: 'text/calendar, text/plain, */*',
-        'User-Agent': 'Mozilla/5.0 (compatible; AcademicSync/1.0)',
-      },
-    });
-  } catch (fetchError) {
-    const msg = fetchError instanceof Error ? fetchError.message : String(fetchError);
-    throw new AppError(`ICS fetch failed for ${icsUrl}: ${msg}`, 502, 'ICS_FETCH_FAILED');
+function isRetryableIcsStatus(status: number) {
+  return status === 408 || status === 422 || status === 425 || status === 429 || status >= 500;
+}
+
+async function fetchIcsOnce(icsUrl: string): Promise<Response> {
+  return fetch(icsUrl, {
+    headers: {
+      Accept: 'text/calendar, text/plain, */*',
+      'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+      'User-Agent':
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+    },
+    signal: AbortSignal.timeout(ICS_FETCH_TIMEOUT_MS),
+  });
+}
+
+export async function fetchAndParseIcs(icsUrl: string): Promise<IcsEvent[]> {
+  let response: Response | null = null;
+  let failure = '';
+
+  // Some providers (myEfrei answers 422) reject the odd request transiently.
+  for (let attempt = 1; attempt <= ICS_FETCH_ATTEMPTS; attempt += 1) {
+    if (attempt > 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_500 * (attempt - 1)));
+    }
+
+    try {
+      const candidate = await fetchIcsOnce(icsUrl);
+      if (candidate.ok) {
+        response = candidate;
+        break;
+      }
+      failure = `HTTP ${candidate.status} on ${icsUrl}`;
+      if (!isRetryableIcsStatus(candidate.status)) break;
+    } catch (fetchError) {
+      const msg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      failure = `for ${icsUrl}: ${msg}`;
+    }
   }
 
-  if (!response.ok) {
-    throw new AppError(`ICS fetch failed: HTTP ${response.status} on ${icsUrl}`, 502, 'ICS_FETCH_FAILED');
+  if (!response) {
+    throw new AppError(`ICS fetch failed${failure.startsWith('HTTP') ? ':' : ''} ${failure}`, 502, 'ICS_FETCH_FAILED');
   }
 
   const text = await response.text();

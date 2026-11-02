@@ -746,7 +746,11 @@ export class SyncService {
         googleSyncEnabled: pushToGoogle,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown sync error';
+      const rawMessage = error instanceof Error ? error.message : 'Unknown sync error';
+      const message =
+        rawMessage === 'invalid_grant'
+          ? 'Google a révoqué l\'accès (invalid_grant) : reconnecte Google Calendar dans les réglages.'
+          : rawMessage;
 
       await this.prisma.syncJob.update({
         where: { id: job.id },
@@ -758,7 +762,9 @@ export class SyncService {
       });
 
       logger.error({ err: error, jobId: job.id }, 'Sync job failed.');
-      throw error;
+      throw rawMessage === 'invalid_grant'
+        ? new AppError(message, 409, 'GOOGLE_RECONNECT_REQUIRED')
+        : error;
     }
   }
 }
