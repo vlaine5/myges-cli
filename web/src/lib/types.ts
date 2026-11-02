@@ -176,3 +176,16 @@ export interface NotificationLogEntry {
   message: string | null;
   error: string | null;
 }
+
+export interface PlanningChange {
+  id: string;
+  runId: string;
+  provider: string;
+  kind: 'ADDED' | 'UPDATED' | 'REMOVED';
+  title: string;
+  startAt: string;
+  detectedAt: string;
+  changedFields: string[];
+  before: Record<string, string | null> | null;
+  after: Record<string, string | null> | null;
+}

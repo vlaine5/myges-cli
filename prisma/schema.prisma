@@ -402,3 +402,24 @@ model EventEnrichmentRule {
   @@index([enabled])
   @@index([matchProvider])
 }
+
+// Every planning change detected when a provider's agenda is refreshed
+// (before/after comparison), kept as a browsable history. Independent of
+// notifications and of Google.
+model PlanningChange {
+  id            String   @id @default(cuid())
+  runId         String
+  provider      String
+  kind          String   // ADDED | UPDATED | REMOVED
+  eventId       String
+  title         String
+  startAt       DateTime
+  changedFields String?  // JSON array, UPDATED only
+  beforeJson    String?
+  afterJson     String?
+  detectedAt    DateTime @default(now())
+
+  @@index([detectedAt])
+  @@index([provider, detectedAt])
+  @@index([runId])
+}

@@ -163,6 +163,8 @@ Configuration : `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRE
 
 Connexion sans tunnel : après l'autorisation, copie l'URL `localhost` où le navigateur atterrit et colle-la dans `/google` (« Connexion sans tunnel SSH »). Passe l'écran de consentement en « Production » pour éviter l'expiration du jeton au bout de 7 jours.
 
+Historique des modifications : page « Modifications » (`GET /api/changes?provider=&kind=&since=&before=`). Chaque synchronisation compare l'ancien et le nouveau planning de chaque provider (ajouté / modifié avec ancien → nouveau / supprimé), indépendamment des notifications et de Google ; la page se met à jour en direct.
+
 Export PDF : page Evenements → « Export PDF » (`GET /api/export/pdf?providers=&subjects=&group=provider|subject|none&start=&end=`).
 
 ## myEfrei & Ensup

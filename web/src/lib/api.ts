@@ -1,4 +1,5 @@
 import type {
+  PlanningChange,
   EventMatch,
   GlobalEvent,
   GlobalEventDetail,
@@ -140,6 +141,8 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   runSchedule: (provider: SchedulableProvider) => request(`/schedules/${provider}/run`, { method: 'POST' }),
+  listPlanningChanges: (search: URLSearchParams) =>
+    request<PlanningChange[]>(`/changes?${search.toString()}`),
   getNotificationSettings: () => request<NotificationSettings>('/notifications/settings'),
   saveNotificationSettings: (payload: NotificationSettingsInput) =>
     request<NotificationSettings>('/notifications/settings', {

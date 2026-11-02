@@ -133,6 +133,7 @@ export class NotificationService {
       fetch: globalThis.fetch,
       retryDelaysMs: [5_000, 30_000],
     },
+    private readonly planningHistoryService?: { record(provider: AcademicProviderId, diff: PlanningDiff, at?: Date): Promise<number> },
   ) {}
 
   private readonly providerLocks = new Map<AcademicProviderId, Promise<void>>();
@@ -312,11 +313,26 @@ export class NotificationService {
     if (!capture?.hadEvents) return;
 
     try {
+      const now = capture.capturedAt;
+      const after = await this.loadPlanning(capture.provider, now);
+
+      // History: every change, whatever the notification settings.
+      if (this.planningHistoryService) {
+        try {
+          const history = diffPlanning(capture.events, after, {
+            now,
+            horizonEnd: new Date(now.getTime() + 365 * DAY_MS),
+          });
+          await this.planningHistoryService.record(capture.provider, history);
+        } catch (error) {
+          logger.error({ err: error, provider: capture.provider }, 'Recording planning history failed.');
+        }
+      }
+
       const row = await this.getRow();
       if (!row.emailEnabled && !row.webhookEnabled) return;
 
-      const now = capture.capturedAt;
-      const fullDiff = diffPlanning(capture.events, await this.loadPlanning(capture.provider, now), {
+      const fullDiff = diffPlanning(capture.events, after, {
         now,
         horizonEnd: new Date(now.getTime() + row.horizonDays * DAY_MS),
       });

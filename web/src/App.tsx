@@ -4,6 +4,7 @@ import { HomePage } from './pages/HomePage';
 import { ProviderPage } from './pages/ProviderPage';
 import { GooglePage } from './pages/GooglePage';
 import { AgendaPage } from './pages/AgendaPage';
+import { ChangesPage } from './pages/ChangesPage';
 import { SyncPage } from './pages/SyncPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { SchedulesPage } from './pages/SchedulesPage';
@@ -28,6 +29,7 @@ export function App() {
         <Route path="/matches" element={<MatchesPage />} />
         <Route path="/planification" element={<SchedulesPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/changes" element={<ChangesPage />} />
         <Route path="/sync" element={<SyncPage />} />
         <Route path="/sync/:jobId" element={<SyncJobDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />
